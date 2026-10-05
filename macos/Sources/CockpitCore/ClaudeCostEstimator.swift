@@ -1,19 +1,35 @@
 import Foundation
 
-/// What recent Claude Code usage on this machine would have cost at API list prices.
-/// On a subscription nothing is billed per token, so this is an equivalent, not a charge.
-public struct ClaudeCost: Equatable, Sendable {
-    /// US dollars since local midnight.
-    public let today: Double
-    /// US dollars over the last seven days.
-    public let last7Days: Double
-    /// Models used in the last seven days that have no known price. Their usage is missing from the totals.
+/// One period's estimate.
+public struct CostWindow: Equatable, Sendable {
+    /// US dollars over the period.
+    public let dollars: Double
+    /// Models used in this period that have no known price. Their usage is missing from `dollars`.
     public let unpricedModels: [String]
 
-    public init(today: Double, last7Days: Double, unpricedModels: [String]) {
+    public init(dollars: Double, unpricedModels: [String] = []) {
+        self.dollars = dollars
+        self.unpricedModels = unpricedModels
+    }
+
+    public var isPartial: Bool { !unpricedModels.isEmpty }
+}
+
+/// What recent Claude Code usage on this machine would have cost at API list prices.
+/// On a subscription nothing is billed per token, so this is an equivalent, not a charge.
+///
+/// Each period carries its own unpriced models. Collecting them once for the whole week and
+/// showing them against both rows would mark today's figure incomplete because of a model
+/// last used five days ago.
+public struct ClaudeCost: Equatable, Sendable {
+    /// Since local midnight.
+    public let today: CostWindow
+    /// Over the last seven days.
+    public let last7Days: CostWindow
+
+    public init(today: CostWindow, last7Days: CostWindow) {
         self.today = today
         self.last7Days = last7Days
-        self.unpricedModels = unpricedModels
     }
 }
 
@@ -53,19 +69,27 @@ public actor ClaudeCostEstimator {
         let startOfToday = calendar.startOfDay(for: now)
         var today = 0.0
         var last7Days = 0.0
-        var unpricedModels = Set<String>()
+        var unpricedToday = Set<String>()
+        var unpricedLast7Days = Set<String>()
         for reply in distinctReplies() where reply.timestamp >= weekAgo {
+            let isToday = reply.timestamp >= startOfToday
             guard let rates = ModelPricing.rates(for: reply.model) else {
-                unpricedModels.insert(reply.model)
+                unpricedLast7Days.insert(reply.model)
+                if isToday {
+                    unpricedToday.insert(reply.model)
+                }
                 continue
             }
             let cost = Self.cost(of: reply, at: rates)
             last7Days += cost
-            if reply.timestamp >= startOfToday {
+            if isToday {
                 today += cost
             }
         }
-        return ClaudeCost(today: today, last7Days: last7Days, unpricedModels: unpricedModels.sorted())
+        return ClaudeCost(
+            today: CostWindow(dollars: today, unpricedModels: unpricedToday.sorted()),
+            last7Days: CostWindow(dollars: last7Days, unpricedModels: unpricedLast7Days.sorted())
+        )
     }
 
     /// The transcripts that can hold a reply newer than `cutoff`, with their modification date and size.

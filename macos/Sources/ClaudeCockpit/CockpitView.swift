@@ -100,11 +100,10 @@ final class CockpitView: NSView {
         costStack.arrangedSubviews.forEach { $0.removeFromSuperview() }
         costStack.isHidden = snapshot.claudeCost == nil
         if let cost = snapshot.claudeCost {
-            let isPartial = !cost.unpricedModels.isEmpty
-            costStack.addFullWidth(Self.statRow("TODAY", value: apiEquivalent(cost.today, isPartial: isPartial)))
-            costStack.addFullWidth(
-                Self.statRow("7 DAYS", value: apiEquivalent(cost.last7Days, isPartial: isPartial))
-            )
+            // Each row is marked partial on its own period, so a model last used five days
+            // ago does not put a `+` on today's figure.
+            costStack.addFullWidth(Self.statRow("TODAY", value: apiEquivalent(cost.today)))
+            costStack.addFullWidth(Self.statRow("7 DAYS", value: apiEquivalent(cost.last7Days)))
         }
 
         cursorStack.arrangedSubviews.forEach { $0.removeFromSuperview() }
@@ -179,8 +178,8 @@ final class CockpitView: NSView {
     }
 
     /// `~$140 API EQ`: what the usage would cost at API prices, which a subscription does not charge.
-    private func apiEquivalent(_ dollars: Double, isPartial: Bool) -> NSAttributedString {
-        emphasized(CostText.text(dollars, isPartial: isPartial), unit: "API EQ")
+    private func apiEquivalent(_ window: CostWindow) -> NSAttributedString {
+        emphasized(CostText.text(window.dollars, isPartial: window.isPartial), unit: "API EQ")
     }
 
     private func emphasized(_ figure: String, unit: String) -> NSAttributedString {
