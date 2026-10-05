@@ -1,11 +1,12 @@
 # Claude Cockpit — Design
 
-Date: 2026-10-05
+Date: 2026-10-05 (macOS), 2026-10-05 (Linux build added)
 
 ## Purpose
 
-A small, frameless, always-on-top macOS widget that shows the user's Claude plan usage
-(the numbers `/usage` reports) at a glance, without opening a terminal.
+A small, frameless, always-on-top widget that shows the user's Claude plan usage (the
+numbers `/usage` reports) at a glance, without opening a terminal. There are two builds —
+macOS (Swift, AppKit) and Linux (Python, GTK 4) — sharing one design and one set of rules.
 
 Success: the widget floats above other windows, shows current session and weekly usage
 percentages with time until reset, keeps itself up to date, and never shows numbers it
@@ -41,9 +42,9 @@ Example output:
 ```
 You are currently using your subscription to power your Claude Code usage
 
-Current session: 12% used · resets Oct 5 at 2:45pm (America/New_York)
-Current week (all models): 34% used · resets Oct 8 at 9am (America/New_York)
-Current week (Fable): 5% used · resets Oct 8 at 9am (America/New_York)
+Current session: 12% used · resets Oct 5, 2:45pm (America/New_York)
+Current week (all models): 34% used · resets Oct 8, 9am (America/New_York)
+Current week (Fable): 5% used · resets Oct 8, 9am (America/New_York)
 
 What's contributing to your limits usage?
 ...
@@ -53,15 +54,24 @@ Everything after the `Current …` lines is ignored.
 
 ## Structure
 
-Swift package in `claude_cockpit/`, AppKit only, no third-party dependencies,
-minimum macOS 14.
+Two builds in one repository, each with its logic apart from its UI, and the two logic
+layers deliberate one-to-one ports of each other:
 
 ```
-claude_cockpit/
+claude-cockpit/
+  macos/      Swift package, AppKit only, no third-party dependencies, minimum macOS 14
+  linux/      Python package, GTK 4 through PyGObject, no PyPI dependencies, Python 3.11+
+  assets/     Orbitron, shared
+  docs/
+```
+
+### macOS
+
+```
+macos/
   Package.swift
   Info.plist
   build.sh                      # swift build -c release, then assemble ClaudeCockpit.app
-  Resources/Orbitron.ttf, Orbitron-OFL.txt
   Sources/
     CockpitCore/                # pure logic, unit-tested
       UsageMeter.swift
@@ -96,7 +106,9 @@ claude_cockpit/
 - Label from `<name>`: `session` → `SESSION`; `week (all models)` → `WEEK`;
   `week (<X>)` → `WEEK · <X>` uppercased; anything else → `<name>` uppercased.
   New rows therefore appear without code changes.
-- `<when>` has the form `<Mon> <d> at <h>[:mm]<am|pm> (<IANA zone>)`. It is parsed in
+- `<when>` has the form `<Mon> <d>[,][ at] <h>[:mm]<am|pm> (<IANA zone>)`. Claude Code has
+  written that separator both as ` at ` and as `, `, so both are accepted; a build that
+  takes only one of them silently loses every countdown. It is parsed in
   the named zone. The year is not printed, so the parser picks the year that puts the
   date closest to `now`. If `<when>` does not match, the meter carries
   `.unparsed(<when>)` and the widget shows that text verbatim instead of a countdown.
@@ -245,3 +257,85 @@ ignores SIGTERM, and a missing executable.
 
 The UI is verified manually: build the app, launch it, and compare the widget against
 `claude -p "/usage"`.
+
+
+## Linux
+
+The Linux build is a port, not a second design: the same meters, the same thresholds, the
+same refusal to show a number it did not read. `linux/cockpit/` mirrors `CockpitCore` file
+for file, and `linux/cockpit/ui/` replaces AppKit with GTK 4.
+
+```
+linux/
+  pyproject.toml
+  install.sh
+  packaging/claude-cockpit.desktop, claude-cockpit.service
+  cockpit/
+    usage.py          # UsageMeter + UsageParser + ResetCountdown
+    fetcher.py        # UsageFetcher
+    transcripts.py    # TranscriptParser
+    pricing.py        # ModelPricing
+    cost.py           # ClaudeCostEstimator
+    cursor_db.py      # CursorActivityReader
+    config.py         # CockpitAppearance + AppearanceStore
+    app.py            # AppDelegate
+    ui/
+      window.py       # CockpitPanel
+      card.py         # CockpitView + MeterRowView
+      customize.py    # CustomizationWindowController
+      style.css       # Theme
+      fonts.py        # Orbitron registration, through fontconfig
+  tests/
+```
+
+### What the platform forces to differ
+
+**Window.** `NSPanel` pins itself above every window on every Space and remembers where it
+was dragged. Wayland grants a client neither: it cannot place its own surface, and only
+`wlr-layer-shell`, which not every desktop implements, grants an overlay layer. Branching
+per compositor would mean a widget that behaves differently on each desktop and is
+untestable on most, so the Linux build is an ordinary undecorated window and placement is
+a compositor rule the README gives for each desktop. Dragging the card is gone with it.
+
+**Blur.** `NSVisualEffectView` has no portable counterpart. The card is translucent and
+leaves blur to the compositor, which is where it is configured on Linux anyway.
+
+**Settings.** User defaults become one TOML file at `$XDG_CONFIG_HOME/claude-cockpit/
+config.toml`, hand-editable in the same spirit as `defaults write`, written through a
+temporary file and a rename so a crash cannot leave it half-written.
+
+**Finding the CLI.** The macOS search — `~/.local/bin`, Homebrew, then a login `zsh` —
+becomes `PATH` first, then `~/.local/bin`, the mise, asdf, volta and bun shim directories,
+`~/bin`, `/usr/local/bin`, `/usr/bin` and the Flatpak exports, then the login `$SHELL`.
+Version managers are how Claude Code is usually installed on Linux, and their shims are
+exactly what a desktop launcher's minimal `PATH` leaves out.
+
+**Logging.** `os.Logger` becomes the standard library's logging to stderr, which systemd
+collects into the journal.
+
+**Fonts.** Orbitron is registered for the process through fontconfig's application font
+list — the counterpart of `CTFontManagerRegisterFontsForURL` with `.process` scope — and
+the card falls back to the system monospace font if that fails, as on macOS.
+
+**Second launch.** `Gtk.Application` with an application id raises the existing window
+instead of starting a second poller. macOS leaves this to the user.
+
+### Two corrections the port made
+
+Both were found by running the Linux build against live data, and both are fixed in the
+macOS build too:
+
+- **The reset wording.** Claude Code emits `resets Oct 5, 3:20pm (…)`, while the parser
+  expected `resets Oct 5 at 3:20pm (…)`. Every countdown was falling back to printing the
+  line verbatim. Both parsers now accept either separator.
+- **The partial-cost marker.** `unpricedModels` is collected over seven days but was shown
+  against both rows, so a model used five days ago marked *today's* figure incomplete.
+  `ClaudeCost` now carries a window each, with its own set of unpriced models.
+
+### Testing
+
+`linux/tests` covers everything outside `cockpit/ui`, mirroring `Tests/CockpitCoreTests`
+and adding: both reset separators, an unknown time zone, the per-window partial-cost rule,
+transcript re-reading (an unchanged file is not re-read, an appended one is), and the
+config round trip including a title containing a quote. The UI is verified by running the
+widget and comparing it against `claude -p "/usage"`.
