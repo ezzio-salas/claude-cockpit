@@ -30,6 +30,7 @@ Nothing leaves your machine, and the app never touches your credentials.
 | --- | --- |
 | `claude -p "/usage"` | The meters. Signing in is the CLI's job, not the widget's. |
 | `~/.claude/projects` | The API-equivalent cost, from the token counts in Claude Code's transcripts. |
+| `cursor-agent`, its `/usage` screen | The Cursor plan meters. Signing in is the CLI's job too. |
 | `~/.cursor/ai-tracking/ai-code-tracking.db` | Cursor agent activity, read-only. |
 
 The widget only ever shows numbers it actually read. When a read fails it keeps the last

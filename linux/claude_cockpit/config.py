@@ -75,6 +75,8 @@ class Settings:
     cli_command: str = "claude"
     #: Where Claude Code keeps its transcripts, for a profile with its own config directory.
     transcripts_directory: Path | None = None
+    #: The Cursor CLI to read plan usage from: a command name or a path to an executable.
+    cursor_command: str = "cursor-agent"
     #: Whether the person has already been shown the personalize window once.
     has_offered_customization: bool = False
 
@@ -88,8 +90,7 @@ class SettingsStore:
     def load(self) -> Settings:
         values = self._read()
 
-        command = values.get("cli_command")
-        command = command.strip() if isinstance(command, str) and command.strip() else "claude"
+        command = _command(values.get("cli_command"), Settings.cli_command)
 
         transcripts = values.get("transcripts_directory")
         transcripts = (
@@ -102,6 +103,7 @@ class SettingsStore:
             appearance=Appearance.from_mapping(values),
             cli_command=command,
             transcripts_directory=transcripts,
+            cursor_command=_command(values.get("cursor_command"), Settings.cursor_command),
             has_offered_customization=bool(values.get("has_offered_customization")),
         )
 
@@ -120,6 +122,7 @@ class SettingsStore:
         ]
         if settings.transcripts_directory is not None:
             lines.append(f"transcripts_directory = {_quote(str(settings.transcripts_directory))}")
+        lines.append(f"cursor_command = {_quote(settings.cursor_command)}")
         lines.append("")
         lines.append(f"has_offered_customization = {str(settings.has_offered_customization).lower()}")
         lines.append("")
@@ -147,6 +150,10 @@ class SettingsStore:
         except (OSError, tomllib.TOMLDecodeError) as error:
             log.error("Could not read %s, using defaults: %s", self.path, error)
             return {}
+
+
+def _command(raw: object, fallback: str) -> str:
+    return raw.strip() if isinstance(raw, str) and raw.strip() else fallback
 
 
 #: The characters a TOML basic string cannot hold as they are.

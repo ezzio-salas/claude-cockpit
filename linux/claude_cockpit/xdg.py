@@ -14,6 +14,10 @@ def data_home() -> Path:
     return _base_directory("XDG_DATA_HOME", Path.home() / ".local/share")
 
 
+def cache_home() -> Path:
+    return _base_directory("XDG_CACHE_HOME", Path.home() / ".cache")
+
+
 def _base_directory(variable: str, fallback: Path) -> Path:
     """The directory `variable` names. The specification says a value that is unset, empty
     or relative is to be ignored, so those give `fallback`."""

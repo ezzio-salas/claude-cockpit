@@ -14,7 +14,12 @@ struct CockpitSnapshot {
     let isStale: Bool
     /// Shown as two rows under the meters; nil hides them.
     let claudeCost: ClaudeCost?
-    /// Shown as its own section below the Claude rows; nil hides the section.
+    /// Plan usage at the top of the Cursor section; nil leaves it out.
+    let cursorUsage: CursorUsage?
+    /// Beside the Cursor title: when the plan renews, or `STALE · 12m`.
+    let cursorNote: String
+    let isCursorStale: Bool
+    /// Activity rows at the bottom of the Cursor section; nil leaves them out.
     let cursor: CursorActivity?
 }
 
@@ -77,19 +82,21 @@ final class CockpitView: NSView {
     }
 
     func render(_ snapshot: CockpitSnapshot, now: Date) {
-        statusLabel.attributedStringValue = Theme.text(
-            snapshot.status,
-            font: Theme.displayFont(size: 8),
-            color: snapshot.isStale ? Theme.amber : accent.withAlphaComponent(0.6),
-            kern: 1.5
-        )
+        statusLabel.attributedStringValue = noteText(snapshot.status, isStale: snapshot.isStale)
         // An empty label still has a default line height, which would nudge the header as the status comes and goes.
         statusLabel.isHidden = snapshot.status.isEmpty
 
         bodyStack.arrangedSubviews.forEach { $0.removeFromSuperview() }
         switch snapshot.body {
         case .meters(let meters):
-            meters.forEach { bodyStack.addFullWidth(MeterRowView(meter: $0, now: now, accent: accent)) }
+            for meter in meters {
+                bodyStack.addFullWidth(MeterRowView(
+                    label: meter.label,
+                    percentUsed: meter.percentUsed,
+                    caption: Self.resetText(for: meter.reset, now: now),
+                    accent: accent
+                ))
+            }
         case .message(let message):
             bodyStack.addFullWidth(NSTextField.label(Theme.text(
                 message, font: Theme.displayFont(size: 9), color: Theme.primaryText, kern: 1.5
@@ -107,9 +114,16 @@ final class CockpitView: NSView {
         }
 
         cursorStack.arrangedSubviews.forEach { $0.removeFromSuperview() }
-        cursorStack.isHidden = snapshot.cursor == nil
+        cursorStack.isHidden = snapshot.cursorUsage == nil && snapshot.cursor == nil
+        let cursorTitle = NSTextField.label(sectionTitleText("CURSOR"))
+        if let usage = snapshot.cursorUsage {
+            let note = NSTextField.label(noteText(snapshot.cursorNote, isStale: snapshot.isCursorStale))
+            cursorStack.addFullWidth(NSStackView.splitRow(leading: cursorTitle, trailing: note))
+            cursorStack.addFullWidth(cursorUsageRows(usage, isStale: snapshot.isCursorStale))
+        } else {
+            cursorStack.addFullWidth(cursorTitle)
+        }
         if let cursor = snapshot.cursor {
-            cursorStack.addFullWidth(NSTextField.label(sectionTitleText("CURSOR")))
             cursorStack.addFullWidth(Self.statRow("TODAY", value: requestCount(cursor.requestsToday)))
             cursorStack.addFullWidth(Self.statRow("7 DAYS", value: requestCount(cursor.requestsLast7Days)))
             if let model = cursor.topModel {
@@ -159,6 +173,38 @@ final class CockpitView: NSView {
 
     private func sectionTitleText(_ name: String) -> NSAttributedString {
         Theme.text(name, font: Theme.displayFont(size: 11, weight: .bold), color: accent, kern: 3)
+    }
+
+    /// The short note beside a section title, amber when it reports a stale reading.
+    private func noteText(_ note: String, isStale: Bool) -> NSAttributedString {
+        Theme.text(
+            note,
+            font: Theme.displayFont(size: 8),
+            color: isStale ? Theme.amber : accent.withAlphaComponent(0.6),
+            kern: 1.5
+        )
+    }
+
+    /// One meter per share of the plan, then what was spent beyond it.
+    private func cursorUsageRows(_ usage: CursorUsage, isStale: Bool) -> NSView {
+        let rows = NSStackView.column(spacing: 12)
+        for allowance in usage.allowances {
+            rows.addFullWidth(MeterRowView(
+                label: allowance.label, percentUsed: allowance.percentUsed, caption: nil, accent: accent
+            ))
+        }
+        if let onDemand = usage.onDemand {
+            rows.addFullWidth(Self.statRow("ON-DEMAND", value: Self.statValue(onDemand, color: accent)))
+        }
+        rows.alphaValue = isStale ? 0.45 : 1
+        return rows
+    }
+
+    private static func resetText(for reset: UsageMeter.Reset, now: Date) -> String {
+        switch reset {
+        case .at(let date): return ResetCountdown.text(until: date, now: now)
+        case .unparsed(let text): return "resets \(text)"
+        }
     }
 
     private static func statRow(_ name: String, value: NSAttributedString) -> NSView {

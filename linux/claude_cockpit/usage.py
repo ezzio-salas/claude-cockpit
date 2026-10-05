@@ -35,11 +35,15 @@ class UsageMeter:
 
     @property
     def severity(self) -> Severity:
-        if self.percent_used < 70:
-            return Severity.NORMAL
-        if self.percent_used < 90:
-            return Severity.ELEVATED
-        return Severity.CRITICAL
+        return severity_of(self.percent_used)
+
+
+def severity_of(percent_used: int) -> Severity:
+    if percent_used < 70:
+        return Severity.NORMAL
+    if percent_used < 90:
+        return Severity.ELEVATED
+    return Severity.CRITICAL
 
 
 _LINE = re.compile(r"Current (.+?): (\d+)% used · resets (.+)")

@@ -1,8 +1,8 @@
 # Claude Cockpit for macOS
 
 A small frameless macOS widget that floats above your windows and shows how much of your
-Claude plan you have used, what that usage would cost at API prices, and how much you have
-been using Cursor's agent.
+Claude plan you have used, what that usage would cost at API prices, and how much of your
+Cursor plan you have used.
 
 It is the macOS build of [Claude Cockpit](../README.md); the Linux build is in
 [`../linux`](../linux).
@@ -12,8 +12,8 @@ It is the macOS build of [Claude Cockpit](../README.md); the Linux build is in
 It shows one meter for each limit that Claude Code's `/usage` command reports — the current
 session, the week, and any per-model weekly limit — with the percentage used and the time
 left until it resets. Under the meters it estimates the API-equivalent cost of your recent
-Claude Code usage. If you use [Cursor](https://cursor.com), a second section shows your agent
-activity there.
+Claude Code usage. If you use [Cursor](https://cursor.com), a second section shows how much
+of that plan you have used and your agent activity there.
 
 ## Requirements
 
@@ -133,9 +133,40 @@ Keep in mind:
 
 The rows are hidden when the transcripts folder does not exist.
 
+## Cursor usage
+
+When the Cursor CLI (`cursor-agent`) is installed and signed in, the card gains a **CURSOR**
+section that starts with your plan:
+
+| Row | Meaning |
+| --- | --- |
+| `INCLUDED`, `AUTO`, `API`, … | One meter per share of the plan the CLI's `/usage` screen lists, with the percentage used. |
+| `ON-DEMAND` | What has been spent beyond the plan this month, for example `$482.19`. |
+
+Beside the `CURSOR` title, `RESETS OCT 17` is the day the plan renews, as the CLI words it.
+The meters follow the same colors as Claude's.
+
+The Cursor CLI has no command that prints usage; the figures exist only on the `/usage`
+screen of its interactive mode. So the widget starts `cursor-agent --trust` on a
+pseudo-terminal in an empty folder, types `/usage` as you would, reads the table it draws
+and quits it. That takes a few seconds, so the timer reads it every five minutes; clicking
+the card reads it at once. Every start of the CLI files an empty session record under
+`~/.cursor/chats`, and the widget removes the ones it caused.
+
+To read usage through another command, for example a wrapper script that picks a Cursor
+account:
+
+```sh
+defaults write local.claude-cockpit cursorCommand cursor-agent-work
+```
+
+When a read fails after a good one, the plan rows stay, dimmed, with `STALE · 12m` beside
+the title, exactly as the Claude meters do. When the CLI is not installed, the plan rows
+are left out.
+
 ## Cursor activity
 
-When Cursor is installed, the card gains a **CURSOR** section:
+When Cursor is installed, the **CURSOR** section also counts your agent activity:
 
 | Row | Meaning |
 | --- | --- |
@@ -152,7 +183,7 @@ consequences:
   editing a file do not appear.
 - Only this machine is counted, not other devices or Cursor's web agents.
 
-The section needs no setup and is hidden when that database does not exist. It refreshes
+These rows need no setup and are left out when that database does not exist. They refresh
 together with the Claude meters.
 
 ## Using another Claude profile
@@ -206,13 +237,14 @@ servers are not loaded. The widget parses the `Current …: N% used · resets �
 the output and ignores the rest.
 
 The cost estimate reads only the token counts and model names from Claude Code's local
-transcripts, described under [Estimated cost](#estimated-cost). Cursor activity comes from
-a read-only query of Cursor's local SQLite database, described under
-[Cursor activity](#cursor-activity).
+transcripts, described under [Estimated cost](#estimated-cost). Cursor plan usage is read
+off the Cursor CLI's own `/usage` screen, described under [Cursor usage](#cursor-usage),
+and Cursor activity comes from a read-only query of Cursor's local SQLite database,
+described under [Cursor activity](#cursor-activity).
 
 The app never reads your credentials and makes no network requests of its own; signing in
-to Claude is handled entirely by the CLI, and the cost and Cursor numbers never leave your
-machine.
+to Claude and to Cursor is handled entirely by their CLIs, and the cost and activity
+numbers never leave your machine.
 
 ## Troubleshooting
 
@@ -237,6 +269,12 @@ because `log` is also a shell builtin:
 of the `/usage` output. If that changes, the widget shows `UNRECOGNIZED OUTPUT` and
 `UsageParser` needs updating.
 
+**The Cursor plan rows never appear** — The widget looks for `cursor-agent` (or your
+`cursorCommand`) in the same places as `claude`. If it is found but signed out, or its
+`/usage` screen has changed wording, the read fails and is logged; the rows stay out until
+a read succeeds. Signing in with `cursor-agent login` fixes the first; the second needs
+`CursorUsageParser` updating.
+
 ## Development
 
 ```sh
@@ -250,7 +288,7 @@ bundled into the `.app`.
 
 | Path | Contents |
 | --- | --- |
-| `Sources/CockpitCore` | Usage parsing, the CLI runner, the cost estimator and the Cursor reader. No UI, fully unit-tested. |
+| `Sources/CockpitCore` | Usage parsing, the CLI runners, the cost estimator and the Cursor readers. No UI, fully unit-tested. |
 | `Sources/ClaudeCockpit` | The AppKit panel, views and the Personalize window. |
 | `Tests/CockpitCoreTests` | Unit tests. |
 | `../assets` | The Orbitron font and its license, shared with the Linux build. |

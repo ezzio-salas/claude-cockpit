@@ -14,7 +14,7 @@ public struct UsageFetcher: Sendable {
         "-p", "/usage", "--no-session-persistence", "--setting-sources", "", "--strict-mcp-config",
     ]
 
-    private static let installDirectories = [
+    static let installDirectories = [
         FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".local/bin"),
         URL(fileURLWithPath: "/opt/homebrew/bin"),
         URL(fileURLWithPath: "/usr/local/bin"),

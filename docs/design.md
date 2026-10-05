@@ -79,6 +79,9 @@ macos/
       ResetCountdown.swift
       UsageFetcher.swift
       CursorActivity.swift
+      CursorUsage.swift
+      CursorUsageFetcher.swift
+      TerminalSession.swift
       ModelPricing.swift
       TranscriptParser.swift
       ClaudeCostEstimator.swift
@@ -149,6 +152,39 @@ and `resets now` once the time has passed.
 - Returns nil when the database does not exist; the widget then hides the Cursor
   section. Any other failure throws, is logged, and also hides the section.
 
+**`CursorUsageFetcher`** — `fetch() async -> Result<CursorUsage, FetchError>`.
+
+- Added after the Linux port, when the Cursor CLI gained a `/usage` screen. The CLI has no
+  command that prints it (`cursor-agent -p "/usage"` sends the text to a model as a prompt),
+  so the fetcher runs the CLI on a pseudo-terminal, as `TerminalSession`, types `/usage`
+  and reads what is drawn. The CLI is started with `--trust` in an empty directory of the
+  user's own (`~/Library/Caches/local.claude-cockpit/cursor-workspace`;
+  `$XDG_CACHE_HOME/claude-cockpit/cursor-workspace` on Linux), so it has no project to
+  index and no trust question to ask. The directory is checked before every start: it must
+  be a real directory owned by the user, mode 0700, and empty, because a trusted workspace
+  can carry hooks and rules the CLI would act on, and a shared location such as `/tmp`
+  would let another account put them there first.
+- The protocol is in three waits: for the screen to draw and go still (0.5s of quiet,
+  at most 8s), for the typed `/usage` to be echoed before Enter is pressed (so a screen
+  asking something else, such as to sign in, is never answered blind), and for the table
+  to appear and the screen to go still again. The whole fetch has a 20s deadline, after
+  which the process group is killed; it is killed after a success too.
+- `CursorUsageParser` strips escape sequences and reads every `<Label> N% used` row (the
+  last drawing of a repeated row wins), `On-Demand $N`, and `Resets <Mon> <d>`.
+  `CursorUsage` holds the rows as `Allowance(label:percentUsed:)`, the reset wording
+  verbatim (the CLI prints a date without a time or zone, so no countdown is made of it)
+  and the on-demand figure verbatim.
+- Every start of the CLI files an empty session record under `~/.cursor/chats/<md5 of
+  the workspace path>/<id>/`. A widget polling all day would leave hundreds, so after
+  each fetch the records of that workspace whose `meta.json` names it and has
+  `hasConversation: false` are removed -- only their two known files, and the directory
+  only if that empties it.
+- Read every five minutes by the timer and at once on a click, because each read starts
+  the CLI, about three seconds. Failures after a success keep the reading and mark it
+  stale, as the Claude meters are; `cliNotFound` clears it, which hides the rows.
+- Command: `cursor-agent` by default, `cursorCommand` user default to change it. Found the
+  same way as `claude`.
+
 **`ClaudeCostEstimator`** — `estimate(now:calendar:) -> ClaudeCost?` (an actor).
 
 - Added after the first version. A subscription has no per-token bill and `/cost` prints
@@ -194,9 +230,11 @@ first launch places it near the top-right of the main screen.
 
 - Under the meters, when a cost estimate is available: `TODAY` and `7 DAYS` rows such as
   `~$8.40 API EQ`. These are not dimmed when the Claude reading is stale.
-- Below that, when Cursor activity is available: a `CURSOR` title and three
-  label/value rows (`TODAY`, `7 DAYS`, `TOP MODEL`). This section is not dimmed when the
-  Claude reading is stale.
+- Below that, the `CURSOR` section, shown when either part of it is available. When plan
+  usage is: a note beside the title (`RESETS OCT 17`, or `STALE · 12m` in amber), one
+  meter per allowance without a reset line, and an `ON-DEMAND` row; the meters are dimmed
+  when that reading is stale. When activity is: three label/value rows (`TODAY`, `7 DAYS`,
+  `TOP MODEL`), never dimmed.
 
 **Personalization** (added after the first version)
 
@@ -277,6 +315,7 @@ linux/
     pricing.py        # ModelPricing
     cost.py           # ClaudeCostEstimator
     cursor_db.py      # CursorActivityReader
+    cursor_usage.py   # CursorUsage + CursorUsageParser + CursorUsageFetcher + TerminalSession
     periods.py        # the week, and local midnight
     config.py         # CockpitAppearance + AppearanceStore
     xdg.py            # the XDG base directories
@@ -350,6 +389,8 @@ macOS build too:
 `linux/tests` covers everything outside `claude_cockpit/ui`, mirroring `Tests/CockpitCoreTests`
 and adding: both reset separators, an unknown time zone, the per-window partial-cost rule,
 transcript re-reading (an unchanged file is not re-read, an appended one is), local
-midnight on the days the clocks change, the login-shell `PATH` lookup, and the config
-round trip including a title containing a quote or a control character. The UI is
+midnight on the days the clocks change, the login-shell `PATH` lookup, the Cursor `/usage`
+screen (parsed from a real capture, and fetched from stand-in CLIs on a real
+pseudo-terminal), and the config round trip including a title containing a quote or a
+control character. The UI is
 verified by running the widget and comparing it against `claude -p "/usage"`.

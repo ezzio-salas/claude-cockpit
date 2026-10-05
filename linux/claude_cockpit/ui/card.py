@@ -19,8 +19,9 @@ from gi.repository import Gtk, Pango  # noqa: E402
 from ..config import Appearance  # noqa: E402
 from ..cost import ClaudeCost  # noqa: E402
 from ..cursor_db import CursorActivity  # noqa: E402
+from ..cursor_usage import CursorUsage  # noqa: E402
 from ..pricing import cost_text  # noqa: E402
-from ..usage import Severity, UsageMeter, reset_countdown  # noqa: E402
+from ..usage import Severity, UsageMeter, reset_countdown, severity_of  # noqa: E402
 
 CARD_WIDTH = 260
 #: Warning colors, fixed whatever accent is chosen.
@@ -47,7 +48,12 @@ class Snapshot:
     is_stale: bool
     #: Two rows under the meters; None hides them.
     claude_cost: ClaudeCost | None
-    #: Its own section below the Claude rows; None hides the section.
+    #: Plan usage at the top of the Cursor section; None leaves it out.
+    cursor_usage: CursorUsage | None
+    #: Beside the Cursor title: when the plan renews, or `STALE · 12m`.
+    cursor_note: str
+    is_cursor_stale: bool
+    #: Activity rows at the bottom of the Cursor section; None leaves them out.
     cursor: CursorActivity | None
 
 
@@ -109,7 +115,9 @@ class CockpitCard(Gtk.Box):
             self._body.append(_label(snapshot.message, "cockpit-message", ellipsize=True))
         else:
             for meter in snapshot.meters:
-                self._body.append(_meter_row(meter, now))
+                self._body.append(
+                    _meter_row(meter.label, meter.percent_used, reset_countdown(meter, now))
+                )
         _set_class(self._body, "cockpit-stale", snapshot.is_stale)
 
         _clear(self._cost)
@@ -123,9 +131,15 @@ class CockpitCard(Gtk.Box):
                 self._cost.append(_stat_row(name, figure, "API EQ"))
 
         _clear(self._cursor)
-        self._cursor.set_visible(snapshot.cursor is not None)
-        if snapshot.cursor is not None:
+        self._cursor.set_visible(
+            snapshot.cursor_usage is not None or snapshot.cursor is not None
+        )
+        if snapshot.cursor_usage is not None:
+            self._cursor.append(_cursor_header(snapshot.cursor_note, snapshot.is_cursor_stale))
+            self._cursor.append(_cursor_usage(snapshot.cursor_usage, snapshot.is_cursor_stale))
+        elif snapshot.cursor is not None:
             self._cursor.append(_label("CURSOR", "cockpit-section-title"))
+        if snapshot.cursor is not None:
             self._cursor.append(_stat_row("TODAY", *_requests(snapshot.cursor.requests_today)))
             self._cursor.append(
                 _stat_row("7 DAYS", *_requests(snapshot.cursor.requests_last_7_days))
@@ -136,11 +150,35 @@ class CockpitCard(Gtk.Box):
                 )
 
 
-def _meter_row(meter: UsageMeter, now: datetime) -> Gtk.Widget:
-    severity = _SEVERITY_CLASS[meter.severity]
+def _cursor_header(note: str, is_stale: bool) -> Gtk.Widget:
+    status = _label(note, "cockpit-status")
+    status.set_halign(Gtk.Align.END)
+    status.set_hexpand(True)
+    _set_class(status, "stale", is_stale)
 
-    label = _label(meter.label, "cockpit-meter-label")
-    percent = _label(f"{meter.percent_used}%", "cockpit-meter-percent")
+    header = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL)
+    header.append(_label("CURSOR", "cockpit-section-title"))
+    header.append(status)
+    return header
+
+
+def _cursor_usage(usage: CursorUsage, is_stale: bool) -> Gtk.Widget:
+    """One meter per share of the plan, then what was spent beyond it."""
+    rows = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
+    for allowance in usage.allowances:
+        rows.append(_meter_row(allowance.label, allowance.percent_used, None))
+    if usage.on_demand is not None:
+        rows.append(_stat_row("ON-DEMAND", usage.on_demand, None))
+    _set_class(rows, "cockpit-stale", is_stale)
+    return rows
+
+
+def _meter_row(name: str, percent_used: int, caption: str | None) -> Gtk.Widget:
+    """A limit's name, percentage and bar, with `caption` -- when it resets -- underneath."""
+    severity = _SEVERITY_CLASS[severity_of(percent_used)]
+
+    label = _label(name, "cockpit-meter-label")
+    percent = _label(f"{percent_used}%", "cockpit-meter-percent")
     percent.set_halign(Gtk.Align.END)
     percent.set_hexpand(True)
     if severity:
@@ -153,14 +191,15 @@ def _meter_row(meter: UsageMeter, now: datetime) -> Gtk.Widget:
 
     bar = Gtk.ProgressBar()
     bar.add_css_class("cockpit-bar")
-    bar.set_fraction(min(max(meter.percent_used / 100, 0.0), 1.0))
+    bar.set_fraction(min(max(percent_used / 100, 0.0), 1.0))
     if severity:
         bar.add_css_class(severity)
 
     row = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
     row.append(head)
     row.append(bar)
-    row.append(_label(reset_countdown(meter, now).upper(), "cockpit-meter-reset", ellipsize=True))
+    if caption is not None:
+        row.append(_label(caption.upper(), "cockpit-meter-reset", ellipsize=True))
     return row
 
 

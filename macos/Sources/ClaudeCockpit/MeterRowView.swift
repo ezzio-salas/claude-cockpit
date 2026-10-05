@@ -1,27 +1,28 @@
 import AppKit
 import CockpitCore
 
-/// One usage limit: its name, percentage, a bar, and when it resets.
+/// One usage limit: its name, percentage and a bar, with a caption -- when it resets -- underneath.
 final class MeterRowView: NSView {
-    init(meter: UsageMeter, now: Date, accent: NSColor) {
+    init(label: String, percentUsed: Int, caption: String?, accent: NSColor) {
         super.init(frame: .zero)
-        let color = Theme.color(for: meter.severity, accent: accent)
+        let color = Theme.color(for: UsageMeter.Severity(percentUsed: percentUsed), accent: accent)
 
         let name = NSTextField.label(Theme.text(
-            meter.label, font: Theme.displayFont(size: 10), color: Theme.primaryText, kern: 1.5
+            label, font: Theme.displayFont(size: 10), color: Theme.primaryText, kern: 1.5
         ))
         let percent = NSTextField.label(Theme.text(
-            "\(meter.percentUsed)%", font: .monospacedDigitSystemFont(ofSize: 17, weight: .medium), color: color
-        ))
-        let reset = NSTextField.label(Theme.text(
-            Self.resetText(for: meter.reset, now: now).uppercased(),
-            font: .monospacedSystemFont(ofSize: 9.5, weight: .regular), color: Theme.secondaryText, kern: 0.5
+            "\(percentUsed)%", font: .monospacedDigitSystemFont(ofSize: 17, weight: .medium), color: color
         ))
 
         let column = NSStackView.column(spacing: 6)
         column.addFullWidth(NSStackView.splitRow(leading: name, trailing: percent))
-        column.addFullWidth(MeterBarView(fraction: CGFloat(meter.percentUsed) / 100, color: color))
-        column.addFullWidth(reset)
+        column.addFullWidth(MeterBarView(fraction: CGFloat(percentUsed) / 100, color: color))
+        if let caption {
+            column.addFullWidth(NSTextField.label(Theme.text(
+                caption.uppercased(),
+                font: .monospacedSystemFont(ofSize: 9.5, weight: .regular), color: Theme.secondaryText, kern: 0.5
+            )))
+        }
 
         addSubview(column)
         NSLayoutConstraint.activate([
@@ -34,13 +35,6 @@ final class MeterRowView: NSView {
 
     required init?(coder: NSCoder) {
         fatalError("init(coder:) is not supported")
-    }
-
-    private static func resetText(for reset: UsageMeter.Reset, now: Date) -> String {
-        switch reset {
-        case .at(let date): return ResetCountdown.text(until: date, now: now)
-        case .unparsed(let text): return "resets \(text)"
-        }
     }
 }
 

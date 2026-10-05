@@ -2,11 +2,15 @@ import AppKit
 import CockpitCore
 import os
 
-/// Polls Claude for usage and cost and Cursor for activity, and keeps the panel showing the latest good readings.
+/// Polls Claude for usage and cost and Cursor for usage and activity, and keeps the panel showing the latest
+/// good readings.
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private static let refreshInterval: TimeInterval = 60
     /// Countdowns and the stale age move on without a fetch.
     private static let redrawInterval: TimeInterval = 30
+    /// Cursor's plan usage moves slowly and costs a start of its CLI to read, so the timer reads it less
+    /// often than Claude's. A click reads it at once.
+    private static let cursorUsageInterval: TimeInterval = 300
 
     private let log = Logger(subsystem: "local.claude-cockpit", category: "usage")
     /// `defaults write local.claude-cockpit cliCommand <name or path>` points the widget at another CLI.
@@ -19,12 +23,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             ?? ClaudeCostEstimator.defaultTranscripts
     )
     private let cursorReader = CursorActivityReader()
+    /// `defaults write local.claude-cockpit cursorCommand <name or path>` points the widget at another
+    /// Cursor CLI.
+    private let cursorUsageFetcher = CursorUsageFetcher(
+        command: UserDefaults.standard.string(forKey: "cursorCommand") ?? "cursor-agent"
+    )
     private let appearanceStore = AppearanceStore()
     private lazy var customization = CustomizationWindowController(store: appearanceStore) { [weak self] in
         self?.panel.apply($0)
         self?.render()
     }
-    private lazy var panel = CockpitPanel(menu: makeMenu(), onClick: { [weak self] in self?.refresh() })
+    private lazy var panel = CockpitPanel(menu: makeMenu(), onClick: { [weak self] in self?.refreshEverything() })
 
     private var lastReading: (meters: [UsageMeter], takenAt: Date)?
     /// Why the most recent fetch failed; nil after a success.
@@ -33,6 +42,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var claudeCost: ClaudeCost?
     /// Nil when Cursor is not in use on this machine or its database could not be read.
     private var cursorActivity: CursorActivity?
+    /// The last good reading of Cursor's plan usage; nil when the Cursor CLI is not installed.
+    private var cursorUsage: (usage: CursorUsage, takenAt: Date)?
+    /// Whether the most recent read of it failed, which marks the reading stale.
+    private var cursorUsageFailed = false
+    /// When the timer next reads it.
+    private var cursorUsageDue = Date.distantPast
     private var isFetching = false
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -59,15 +74,27 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         customization.present()
     }
 
+    /// A refresh the person asked for, which reads Cursor's plan usage too.
+    @objc private func refreshEverything() {
+        cursorUsageDue = .distantPast
+        refresh()
+    }
+
     @objc private func refresh() {
         guard !isFetching else { return }
         isFetching = true
         render()
 
+        let readsCursorUsage = Date() >= cursorUsageDue
+        if readsCursorUsage {
+            cursorUsageDue = Date().addingTimeInterval(Self.cursorUsageInterval)
+        }
+
         Task { @MainActor in
             async let usage = fetcher.fetch()
             async let cost = costEstimator.estimate(now: Date())
             async let activity = readCursorActivity()
+            async let planUsage = fetchCursorUsage(isDue: readsCursorUsage)
             let result = await usage
             let estimate = await cost
             let unpriced = estimate?.last7Days.unpricedModels ?? []
@@ -76,9 +103,32 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
             claudeCost = estimate
             cursorActivity = await activity
+            record(await planUsage)
             isFetching = false
             record(result)
             render()
+        }
+    }
+
+    /// The plan usage or why it could not be read; nil when this poll does not read it.
+    private func fetchCursorUsage(isDue: Bool) async -> Result<CursorUsage, CursorUsageFetcher.FetchError>? {
+        isDue ? await cursorUsageFetcher.fetch() : nil
+    }
+
+    private func record(_ result: Result<CursorUsage, CursorUsageFetcher.FetchError>?) {
+        switch result {
+        case nil:
+            break
+        case .success(let usage):
+            cursorUsage = (usage, Date())
+            cursorUsageFailed = false
+        case .failure(.cliNotFound):
+            // No Cursor CLI is the ordinary case of a machine without Cursor, not a fault.
+            cursorUsage = nil
+            cursorUsageFailed = false
+        case .failure(let error):
+            cursorUsageFailed = true
+            log.error("Cursor usage fetch failed: \(String(describing: error), privacy: .public)")
         }
     }
 
@@ -127,9 +177,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         } else {
             body = .message(failure ?? "READING USAGE")
         }
+        let isCursorStale = cursorUsage != nil && cursorUsageFailed
+        let cursorNote: String
+        if let cursorUsage, isCursorStale {
+            cursorNote = "STALE · \(CompactDuration.text(now.timeIntervalSince(cursorUsage.takenAt)))"
+        } else {
+            cursorNote = cursorUsage?.usage.resets.map { "RESETS \($0.uppercased())" } ?? ""
+        }
+
         panel.render(
             CockpitSnapshot(
-                body: body, status: status, isStale: isStale, claudeCost: claudeCost, cursor: cursorActivity
+                body: body,
+                status: status,
+                isStale: isStale,
+                claudeCost: claudeCost,
+                cursorUsage: cursorUsage?.usage,
+                cursorNote: cursorNote,
+                isCursorStale: isCursorStale,
+                cursor: cursorActivity
             ),
             now: now
         )
@@ -137,7 +202,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func makeMenu() -> NSMenu {
         let menu = NSMenu()
-        menu.addItem(withTitle: "Refresh", action: #selector(refresh), keyEquivalent: "").target = self
+        menu.addItem(withTitle: "Refresh", action: #selector(refreshEverything), keyEquivalent: "").target = self
         menu.addItem(withTitle: "Customize…", action: #selector(showCustomization), keyEquivalent: "").target = self
         menu.addItem(.separator())
         menu.addItem(withTitle: "Quit Claude Cockpit", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "")

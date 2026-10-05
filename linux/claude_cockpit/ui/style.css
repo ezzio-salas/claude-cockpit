@@ -138,8 +138,8 @@ progressbar.cockpit-bar.critical progress {
   color: rgba(255, 255, 255, 0.42);
 }
 
-/* A stale Claude reading dims the meters. The cost and Cursor rows are read
-   from local files and are never stale, so they keep their opacity. */
+/* A stale reading dims its meters, Claude's and Cursor's alike. The cost and Cursor
+   activity rows are read from local files and are never stale, so they keep their opacity. */
 .cockpit-stale {
   opacity: 0.45;
 }

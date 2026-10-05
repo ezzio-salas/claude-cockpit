@@ -12,6 +12,14 @@ public struct UsageMeter: Equatable {
         case normal
         case elevated
         case critical
+
+        public init(percentUsed: Int) {
+            switch percentUsed {
+            case ..<70: self = .normal
+            case ..<90: self = .elevated
+            default: self = .critical
+            }
+        }
     }
 
     public let label: String
@@ -25,10 +33,6 @@ public struct UsageMeter: Equatable {
     }
 
     public var severity: Severity {
-        switch percentUsed {
-        case ..<70: return .normal
-        case ..<90: return .elevated
-        default: return .critical
-        }
+        Severity(percentUsed: percentUsed)
     }
 }
