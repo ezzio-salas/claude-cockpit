@@ -37,7 +37,9 @@ public enum UsageParser {
 
     /// Parses `<Mon> <d> at <h>[:mm]<am|pm> (<IANA zone>)`.
     private static func reset(from text: String, now: Date) -> UsageMeter.Reset {
-        guard let match = text.wholeMatch(of: #/([A-Za-z]{3}) (\d{1,2}) at (\d{1,2})(?::(\d{2}))?(am|pm) \((.+)\)/#),
+        // Claude Code has written the date and the time separated both by ` at ` and by `, `.
+        // Both are accepted, so a change of wording on that one separator does not cost the countdown.
+        guard let match = text.wholeMatch(of: #/([A-Za-z]{3}) (\d{1,2}),?(?: at)? (\d{1,2})(?::(\d{2}))?(am|pm) \((.+)\)/#),
               let monthIndex = monthAbbreviations.firstIndex(of: match.1.lowercased()),
               let day = Int(match.2),
               let hour12 = Int(match.3), (1...12).contains(hour12),

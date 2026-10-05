@@ -31,6 +31,20 @@ final class UsageParserTests: XCTestCase {
         ])
     }
 
+    /// The wording Claude Code emits now: the date and the time separated by a comma rather
+    /// than by ` at `. Without this the countdown falls back to printing the line verbatim.
+    func testParsesTheCommaSeparatedResetWording() {
+        let report = """
+        Current session: 47% used · resets Oct 5, 3:20pm (America/New_York)
+        Current week (all models): 6% used · resets Oct 7, 8pm (America/New_York)
+        """
+
+        XCTAssertEqual(UsageParser.parse(report, now: now), [
+            UsageMeter(label: "SESSION", percentUsed: 47, reset: .at(date(2026, 10, 5, 15, 20, zone: newYork))),
+            UsageMeter(label: "WEEK", percentUsed: 6, reset: .at(date(2026, 10, 7, 20, 0, zone: newYork))),
+        ])
+    }
+
     func testReadsResetTimeInTheZoneItNames() {
         let meters = UsageParser.parse("Current session: 5% used · resets Oct 5 at 3pm (Asia/Tokyo)", now: now)
 
