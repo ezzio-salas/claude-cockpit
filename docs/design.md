@@ -102,10 +102,13 @@ and `resets now` once the time has passed.
 
 **`UsageFetcher`** — `fetch() async -> Result<String, FetchError>`.
 
-- Locates `claude` once: first existing of `~/.local/bin/claude`,
-  `/opt/homebrew/bin/claude`, `/usr/local/bin/claude`; otherwise asks a login shell
-  (`/bin/zsh -lc 'command -v claude'`). GUI apps do not inherit the shell `PATH`,
-  hence the explicit search.
+- The command to run is `claude` by default and can be changed with the `cliCommand`
+  user default (a command name or a path to an executable), for example to a wrapper
+  that selects another config directory.
+- Resolves the command on each fetch. A value containing `/` is used as a path. A bare
+  name is looked up in `~/.local/bin`, `/opt/homebrew/bin` and `/usr/local/bin`, then
+  by a login shell (`command -v`). GUI apps do not inherit the shell `PATH`, hence the
+  explicit search.
 - Runs the command off the main thread with a 20s timeout. On timeout the process is
   killed with SIGKILL, because a CLI blocked in a system call (for example behind a
   macOS privacy prompt) does not act on SIGTERM.

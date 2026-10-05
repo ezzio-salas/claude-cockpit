@@ -14,21 +14,26 @@ public struct UsageFetcher: Sendable {
         "-p", "/usage", "--no-session-persistence", "--setting-sources", "", "--strict-mcp-config",
     ]
 
-    private let executable: URL?
+    private static let installDirectories = [
+        FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".local/bin"),
+        URL(fileURLWithPath: "/opt/homebrew/bin"),
+        URL(fileURLWithPath: "/usr/local/bin"),
+    ]
+
+    private let command: String
     private let timeout: TimeInterval
 
-    /// - Parameter executable: The CLI to run. When nil, it is located on each fetch.
-    public init(executable: URL? = nil, timeout: TimeInterval = 20) {
-        self.executable = executable
+    /// - Parameter command: The CLI to run: a command name such as `claude`, or a path to an executable.
+    ///   It is resolved on each fetch, so a CLI installed while the app runs is picked up.
+    public init(command: String = "claude", timeout: TimeInterval = 20) {
+        self.command = command
         self.timeout = timeout
     }
 
     public func fetch() async -> Result<String, FetchError> {
         await withCheckedContinuation { continuation in
             DispatchQueue.global(qos: .utility).async {
-                guard let cli = executable ?? Self.locateCLI(),
-                      FileManager.default.isExecutableFile(atPath: cli.path)
-                else {
+                guard let cli = Self.resolve(command, searchDirectories: Self.installDirectories) else {
                     continuation.resume(returning: .failure(.cliNotFound))
                     return
                 }
@@ -37,23 +42,28 @@ public struct UsageFetcher: Sendable {
         }
     }
 
-    /// Apps launched from Finder do not inherit the shell `PATH`, so the usual install locations are checked first.
-    static func locateCLI() -> URL? {
-        let candidates = [
-            FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".local/bin/claude"),
-            URL(fileURLWithPath: "/opt/homebrew/bin/claude"),
-            URL(fileURLWithPath: "/usr/local/bin/claude"),
-        ]
-        if let installed = candidates.first(where: { FileManager.default.isExecutableFile(atPath: $0.path) }) {
-            return installed
+    /// Finds the executable for `command`. A command containing `/` is taken as a path. A bare name is looked up
+    /// in `searchDirectories` and then by a login shell, because apps launched from Finder do not inherit the
+    /// shell `PATH`.
+    static func resolve(_ command: String, searchDirectories: [URL]) -> URL? {
+        func executable(at path: String) -> URL? {
+            FileManager.default.isExecutableFile(atPath: path) ? URL(fileURLWithPath: path) : nil
+        }
+
+        if command.contains("/") {
+            return executable(at: (command as NSString).expandingTildeInPath)
+        }
+        for directory in searchDirectories {
+            if let installed = executable(at: directory.appendingPathComponent(command).path) {
+                return installed
+            }
         }
 
         let shell = URL(fileURLWithPath: "/bin/zsh")
-        guard case .success(let output) = run(shell, arguments: ["-lc", "command -v claude"], timeout: 5) else {
-            return nil
-        }
-        let path = output.trimmingCharacters(in: .whitespacesAndNewlines)
-        return FileManager.default.isExecutableFile(atPath: path) ? URL(fileURLWithPath: path) : nil
+        // The name travels as an argument, never as shell source.
+        let lookup = run(shell, arguments: ["-lc", #"command -v -- "$1""#, "zsh", command], timeout: 5)
+        guard case .success(let output) = lookup else { return nil }
+        return executable(at: output.trimmingCharacters(in: .whitespacesAndNewlines))
     }
 
     private static func run(_ executable: URL, arguments: [String], timeout: TimeInterval) -> Result<String, FetchError> {

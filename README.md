@@ -70,10 +70,41 @@ The widget only ever shows numbers it actually read from Claude.
 | Message | Meaning |
 | --- | --- |
 | `READING USAGE` | The first read is in progress. |
-| `CLAUDE CLI NOT FOUND` | No `claude` executable was found. See [Troubleshooting](#troubleshooting). |
+| `CLAUDE CLI NOT FOUND` | The CLI executable was not found. See [Troubleshooting](#troubleshooting). |
 | `TIMED OUT` | The CLI did not answer within 20 seconds. |
 | `COULD NOT READ USAGE` | The CLI exited with an error, for example when signed out. |
 | `UNRECOGNIZED OUTPUT` | The CLI answered, but without any usage lines. |
+
+## Using another Claude profile
+
+By default the widget runs `claude`. To read usage for a different account or config
+directory, point it at another command and relaunch:
+
+```sh
+defaults write local.claude-cockpit cliCommand claude-work
+```
+
+The value is either a command name, found the same way `claude` is (see
+[Troubleshooting](#troubleshooting)), or a path to an executable such as
+`~/bin/claude-work`. The command receives the same arguments `claude` would.
+
+It has to be an executable file. A shell alias or function will not work, because those
+exist only inside an interactive shell. A small wrapper script does the job:
+
+```sh
+#!/bin/zsh
+# ~/.local/bin/claude-work — Claude Code with a separate config directory
+export CLAUDE_CONFIG_DIR="$HOME/.claude-work"
+exec "$HOME/.local/bin/claude" "$@"
+```
+
+Call `claude` by its full path inside the script (`which claude` shows it), since the
+widget does not run it with your shell's `PATH`. Make the script executable with
+`chmod +x ~/.local/bin/claude-work`. To go back to the default:
+
+```sh
+defaults delete local.claude-cockpit cliCommand
+```
 
 ## How it works
 
@@ -93,9 +124,9 @@ is handled entirely by the CLI.
 ## Troubleshooting
 
 **`CLAUDE CLI NOT FOUND`** — Apps started from Finder do not inherit your shell's `PATH`.
-The widget looks for `claude` in `~/.local/bin`, `/opt/homebrew/bin` and `/usr/local/bin`,
-then asks a login `zsh` (`command -v claude`). Make sure `claude` is in one of those places
-or on the `PATH` of your login shell.
+The widget looks for the command (`claude` unless you [changed it](#using-another-claude-profile))
+in `~/.local/bin`, `/opt/homebrew/bin` and `/usr/local/bin`, then asks a login `zsh`
+(`command -v`). Make sure it is in one of those places or on the `PATH` of your login shell.
 
 **macOS asks for permission at launch** — If the app lives on an external drive, macOS
 asks whether Claude Cockpit may access files on a removable volume. The first read waits

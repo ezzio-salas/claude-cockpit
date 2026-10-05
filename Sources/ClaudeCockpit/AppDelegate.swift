@@ -9,7 +9,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private static let redrawInterval: TimeInterval = 30
 
     private let log = Logger(subsystem: "local.claude-cockpit", category: "usage")
-    private let fetcher = UsageFetcher()
+    /// `defaults write local.claude-cockpit cliCommand <name or path>` points the widget at another CLI.
+    private let fetcher = UsageFetcher(command: UserDefaults.standard.string(forKey: "cliCommand") ?? "claude")
     private lazy var panel = CockpitPanel(menu: makeMenu(), onClick: { [weak self] in self?.refresh() })
 
     private var lastReading: (meters: [UsageMeter], takenAt: Date)?
