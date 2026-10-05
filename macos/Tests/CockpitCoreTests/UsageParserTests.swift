@@ -31,8 +31,8 @@ final class UsageParserTests: XCTestCase {
         ])
     }
 
-    /// The wording Claude Code emits now: the date and the time separated by a comma rather
-    /// than by ` at `. Without this the countdown falls back to printing the line verbatim.
+    /// Claude Code also separates the date and the time by a comma rather than by ` at `.
+    /// Both wordings are in use, and one the parser misses costs the countdown.
     func testParsesTheCommaSeparatedResetWording() {
         let report = """
         Current session: 47% used · resets Oct 5, 3:20pm (America/New_York)

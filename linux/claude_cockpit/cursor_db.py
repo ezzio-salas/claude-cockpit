@@ -8,10 +8,10 @@ from __future__ import annotations
 
 import sqlite3
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import datetime
 from pathlib import Path
 
-WEEK = timedelta(days=7)
+from .periods import WEEK, start_of_today
 
 #: Rows with source `human` are code the user typed, tracked for comparison.
 _REQUEST_COUNT = """
@@ -54,9 +54,6 @@ class CursorActivityReader:
         if not path.is_file():
             return None
 
-        start_of_today = now.astimezone().replace(
-            hour=0, minute=0, second=0, microsecond=0
-        )
         week_ago = now - WEEK
 
         uri = f"file:{path}?mode=ro"
@@ -65,7 +62,7 @@ class CursorActivityReader:
         connection = sqlite3.connect(uri, uri=True, timeout=1.0)
         try:
             return CursorActivity(
-                requests_today=self._first(connection, _REQUEST_COUNT, start_of_today) or 0,
+                requests_today=self._first(connection, _REQUEST_COUNT, start_of_today(now)) or 0,
                 requests_last_7_days=self._first(connection, _REQUEST_COUNT, week_ago) or 0,
                 top_model=self._first(connection, _TOP_MODEL, week_ago),
             )

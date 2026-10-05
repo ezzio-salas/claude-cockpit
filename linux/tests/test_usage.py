@@ -3,11 +3,12 @@ from zoneinfo import ZoneInfo
 
 import pytest
 
-from cockpit.usage import Severity, compact_duration, parse_usage, reset_countdown
+from claude_cockpit.usage import Severity, compact_duration, parse_usage, reset_countdown
 
 NY = ZoneInfo("America/New_York")
 
-# The wording Claude Code emits today: the date and time separated by a comma.
+# Claude Code separates the date and the time by a comma here and by ` at ` elsewhere;
+# both wordings are in use.
 SAMPLE = """You are currently using your subscription to power your Claude Code usage
 
 Current session: 12% used · resets Oct 5, 2:45pm (America/New_York)
@@ -29,7 +30,7 @@ def test_parses_the_real_sample():
 
 
 def test_accepts_the_at_separator_too():
-    """The earlier wording, so an older CLI still gets a countdown."""
+    """The other wording in use, which needs its countdown just as much."""
     meters = parse_usage(
         "Current session: 12% used · resets Oct 5 at 2:45pm (America/New_York)", NOW
     )

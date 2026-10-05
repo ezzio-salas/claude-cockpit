@@ -11,9 +11,23 @@ if ! python3 -c 'import gi; gi.require_version("Gtk", "4.0"); from gi.repository
   exit 1
 fi
 
-python3 -m pip install --user --upgrade .
+# The app gets an environment of its own: most distributions refuse a pip install into the
+# system or user site (PEP 668). System packages stay visible, because GTK's bindings come
+# from the distribution.
+data="${XDG_DATA_HOME:-$HOME/.local/share}"
+environment="$data/claude-cockpit/venv"
+if ! python3 -m venv --system-site-packages "$environment"; then
+  echo "Could not create a virtual environment. Debian and Ubuntu need:" >&2
+  echo "  sudo apt install python3-venv" >&2
+  exit 1
+fi
+"$environment/bin/python" -m pip install --upgrade .
 
-applications="${XDG_DATA_HOME:-$HOME/.local/share}/applications"
+# The desktop entry and the systemd unit both start it from here.
+mkdir -p "$HOME/.local/bin"
+ln -sf "$environment/bin/claude-cockpit" "$HOME/.local/bin/claude-cockpit"
+
+applications="$data/applications"
 mkdir -p "$applications"
 cp packaging/claude-cockpit.desktop "$applications/"
 

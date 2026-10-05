@@ -13,10 +13,8 @@ import ctypes.util
 import logging
 from pathlib import Path
 
-log = logging.getLogger("cockpit.fonts")
+log = logging.getLogger(__name__)
 
-#: The family name inside Orbitron.ttf, used by `style.css`.
-FAMILY = "Orbitron"
 #: What the card falls back to when Orbitron could not be registered.
 FALLBACK_FAMILY = "monospace"
 

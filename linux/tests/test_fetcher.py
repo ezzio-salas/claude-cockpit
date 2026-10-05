@@ -8,11 +8,12 @@ import time
 
 import pytest
 
-from cockpit.fetcher import (
+from claude_cockpit.fetcher import (
     USAGE_ARGUMENTS,
     FetchError,
     FetchErrorKind,
     UsageFetcher,
+    install_directories,
     message_for,
     resolve,
 )
@@ -92,6 +93,20 @@ def test_output_survives_a_lingering_child(tmp_path):
     assert "3%" in UsageFetcher(command=str(cli), timeout=5).fetch()
 
 
+def test_the_cli_finds_programs_installed_beside_it(tmp_path, monkeypatch):
+    """An npm-installed CLI starts `node`, which nvm keeps in the same directory."""
+    stub(tmp_path, "node", """
+        #!/bin/sh
+        echo "Current session: 7% used · resets Oct 5, 2:45pm (America/New_York)"
+    """)
+    cli = stub(tmp_path, "claude", """
+        #!/bin/sh
+        exec node
+    """)
+    monkeypatch.setenv("PATH", "/usr/bin:/bin")
+    assert "7%" in UsageFetcher(command=str(cli)).fetch()
+
+
 def test_missing_executable(tmp_path):
     with pytest.raises(FetchError) as caught:
         UsageFetcher(command=str(tmp_path / "nope")).fetch()
@@ -131,6 +146,41 @@ def test_resolve_expands_a_tilde_path(tmp_path, monkeypatch):
     monkeypatch.setenv("HOME", str(tmp_path))
     cli = stub(tmp_path, "claude-work", "#!/bin/sh\n")
     assert resolve("~/claude-work") == cli
+
+
+def test_resolve_finds_nothing_for_the_home_of_an_unknown_user():
+    assert resolve("~no-such-user-xyz/bin/claude") is None
+
+
+def test_resolve_falls_back_to_the_login_shells_path(tmp_path, monkeypatch):
+    """The shell only has to print `PATH`, so one that is not POSIX -- fish, nushell --
+    works too. This stand-in ignores its arguments and greets before answering."""
+    installed = tmp_path / "installed"
+    installed.mkdir()
+    wanted = stub(installed, "claude", "#!/bin/sh\n")
+    shell = stub(tmp_path, "shell", f"""
+        #!/bin/sh
+        echo "Welcome back"
+        echo "{tmp_path / 'empty'}:{installed}"
+    """)
+    monkeypatch.setenv("PATH", str(tmp_path / "empty"))
+    monkeypatch.setenv("SHELL", str(shell))
+    assert resolve("claude", []) == wanted
+
+
+def test_nvm_versions_are_searched_newest_first(tmp_path, monkeypatch):
+    nvm = tmp_path / "nvm"
+    for version in ("v9.11.2", "v22.4.0", "v20.18.1"):
+        (nvm / "versions/node" / version / "bin").mkdir(parents=True)
+    monkeypatch.setenv("NVM_DIR", str(nvm))
+    searched = [d for d in install_directories() if d.is_relative_to(nvm)]
+    assert [d.parent.name for d in searched] == ["v22.4.0", "v20.18.1", "v9.11.2"]
+
+
+def test_an_empty_xdg_data_home_is_ignored(tmp_path, monkeypatch):
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setenv("XDG_DATA_HOME", "")
+    assert tmp_path / ".local/share/mise/shims" in install_directories()
 
 
 def test_resolve_finds_nothing_for_an_unknown_name(tmp_path, monkeypatch):

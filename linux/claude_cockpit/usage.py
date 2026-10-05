@@ -87,7 +87,7 @@ def _label(name: str) -> str:
 
 
 def _parse_reset(text: str, now: datetime) -> datetime | None:
-    """Parses `<Mon> <d> at <h>[:mm]<am|pm> (<IANA zone>)`, or None if it does not match."""
+    """Parses `<Mon> <d>[,][ at] <h>[:mm]<am|pm> (<IANA zone>)`, or None if it does not match."""
     match = _RESET.fullmatch(text)
     if match is None:
         return None

@@ -35,7 +35,7 @@ public enum UsageParser {
         }
     }
 
-    /// Parses `<Mon> <d> at <h>[:mm]<am|pm> (<IANA zone>)`.
+    /// Parses `<Mon> <d>[,][ at] <h>[:mm]<am|pm> (<IANA zone>)`.
     private static func reset(from text: String, now: Date) -> UsageMeter.Reset {
         // Claude Code has written the date and the time separated both by ` at ` and by `, `.
         // Both are accepted, so a change of wording on that one separator does not cost the countdown.

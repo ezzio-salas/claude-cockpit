@@ -13,15 +13,14 @@ from __future__ import annotations
 import logging
 import os
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import datetime
 from pathlib import Path
 
+from .periods import WEEK, start_of_today
 from .pricing import TokenRates, rates_for
 from .transcripts import ReplyUsage, replies_in
 
-log = logging.getLogger("cockpit.cost")
-
-WEEK = timedelta(days=7)
+log = logging.getLogger(__name__)
 
 
 def default_transcripts() -> Path:
@@ -75,9 +74,7 @@ class ClaudeCostEstimator:
             return None
         self._refresh_parsed(recent, week_ago)
 
-        start_of_today = now.astimezone().replace(
-            hour=0, minute=0, second=0, microsecond=0
-        )
+        midnight = start_of_today(now)
         today = 0.0
         last_7_days = 0.0
         unpriced_today: set[str] = set()
@@ -86,7 +83,7 @@ class ClaudeCostEstimator:
         for reply in self._distinct_replies():
             if reply.timestamp < week_ago:
                 continue
-            is_today = reply.timestamp >= start_of_today
+            is_today = reply.timestamp >= midnight
             rates = rates_for(reply.model)
             if rates is None:
                 unpriced_week.add(reply.model)

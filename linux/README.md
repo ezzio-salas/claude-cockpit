@@ -38,8 +38,11 @@ cd claude-cockpit/linux
 claude-cockpit
 ```
 
-`install.sh` installs the package for your user, plus a desktop entry and a systemd user
-unit. To start it with your graphical session:
+`install.sh` puts the app in a virtual environment of its own under
+`~/.local/share/claude-cockpit`, links the `claude-cockpit` command into `~/.local/bin`,
+and adds a desktop entry and a systemd user unit. On Debian and Ubuntu the virtual
+environment needs `sudo apt install python3-venv` first. To start it with your graphical
+session:
 
 ```sh
 systemctl --user enable --now claude-cockpit.service
@@ -48,7 +51,7 @@ systemctl --user enable --now claude-cockpit.service
 To run it from the source tree without installing anything:
 
 ```sh
-python3 -m cockpit
+python3 -m claude_cockpit
 ```
 
 ## Using it
@@ -77,19 +80,48 @@ A Wayland client cannot position its own window or pin itself above others, so t
 compositor decides where the card goes. One rule does it, and the window is matched by the
 application id `dev.ezzio.ClaudeCockpit`.
 
-**Hyprland** — in `~/.config/hypr/hyprland.conf`:
+**Hyprland** — the rule syntax depends on the version (`hyprctl version`). From 0.53, in
+`~/.config/hypr/hyprland.conf`:
+
+```conf
+windowrule {
+    name = claude-cockpit
+    match:class = ^(dev\.ezzio\.ClaudeCockpit)$
+    float = yes
+    pin = yes
+    move = monitor_w-306 60
+    no_blur = yes
+}
+```
+
+From 0.55, if you have moved to `~/.config/hypr/hyprland.lua`:
+
+```lua
+hl.window_rule({
+  name    = "claude-cockpit",
+  match   = { class = "dev.ezzio.ClaudeCockpit" },
+  float   = true,
+  pin     = true,
+  move    = { "monitor_w-306", "60" },
+  no_blur = true,
+})
+```
+
+Before 0.53:
 
 ```conf
 windowrulev2 = float, class:^(dev\.ezzio\.ClaudeCockpit)$
 windowrulev2 = pin, class:^(dev\.ezzio\.ClaudeCockpit)$
 windowrulev2 = move 100%-306 60, class:^(dev\.ezzio\.ClaudeCockpit)$
 windowrulev2 = noblur, class:^(dev\.ezzio\.ClaudeCockpit)$
-windowrulev2 = nofocus, class:^(dev\.ezzio\.ClaudeCockpit)$
 ```
+
+Leave out `no_focus` (`nofocus`): the card is used by clicking it.
 
 The card draws its own border and glow. If your theme also draws them — Omarchy's
 Tron Legacy theme puts a cyan bloom around the focused window, for example — you get two.
-Turn the compositor's off for this window:
+Turn the compositor's off for this window by adding `no_shadow`, `border_size = 0` and
+`rounding = 0` to the rule — or, before 0.53:
 
 ```conf
 windowrulev2 = noshadow, class:^(dev\.ezzio\.ClaudeCockpit)$
@@ -175,7 +207,7 @@ Keep in mind:
 
 - It covers Claude Code on this machine only, not other devices or claude.ai.
 - If several Claude profiles share one transcripts folder, their usage is added together.
-- Prices are built into the app (`cockpit/pricing.py`, as published in September 2026) and
+- Prices are built into the app (`claude_cockpit/pricing.py`, as published in September 2026) and
   need updating when Anthropic changes them. Fast mode is priced at the standard rate.
 - A trailing `+`, as in `~$12+`, means some usage in *that row's* period came from a model
   the app has no price for, so the true figure is higher. The model's name is logged.
@@ -277,26 +309,26 @@ an ordinary window and leaves placement to a rule you write once.
 
 **`CLAUDE CLI NOT FOUND`** — A desktop launcher or a systemd unit starts with a minimal
 `PATH`, so the widget looks for the command on `PATH`, then in `~/.local/bin`, mise, asdf,
-volta and bun shim directories, `~/bin`, `/usr/local/bin`, `/usr/bin` and the Flatpak
-exports, and finally asks your login shell (`command -v`). If `claude` lives somewhere
-else, give its full path as `cli_command`.
+volta and bun shim directories, nvm's Node versions, `~/bin`, `/usr/local/bin`, `/usr/bin`
+and the Flatpak exports, and finally on the `PATH` your login shell reports. If `claude`
+lives somewhere else, give its full path as `cli_command`.
 
 **Seeing why a read failed** — Failures are logged to stderr:
 
 ```sh
 journalctl --user -u claude-cockpit -n 50     # when started by systemd
-python3 -m cockpit                            # or just run it in a terminal
+python3 -m claude_cockpit                     # or just run it in a terminal
 ```
 
 **The meters disappeared after a Claude Code update** — The widget depends on the wording
 of the `/usage` output. If that changes, it shows `UNRECOGNIZED OUTPUT` and
-`cockpit/usage.py` needs updating.
+`claude_cockpit/usage.py` needs updating.
 
 **The card has two borders or two glows** — Your compositor is drawing its own. See
 [Keeping it in place](#keeping-it-in-place).
 
-**Labels show in a plain monospace font** — Orbitron is loaded from `../assets/Orbitron.ttf`
-through fontconfig. If that file is missing, or fontconfig is unavailable, the card falls
+**Labels show in a plain monospace font** — Orbitron is loaded through fontconfig, from the
+copy installed with the package (`../assets/Orbitron.ttf` in a source checkout). If that file is missing, or fontconfig is unavailable, the card falls
 back to your monospace font. Run in a terminal to see the warning.
 
 ## Development
@@ -304,17 +336,17 @@ back to your monospace font. Run in a terminal to see the warning.
 ```sh
 python3 -m venv --system-site-packages .venv   # GTK comes from the system
 .venv/bin/pip install -e '.[dev]'
-.venv/bin/python -m pytest                     # unit tests for everything outside cockpit/ui
-python3 -m cockpit                             # run it
+.venv/bin/python -m pytest                     # unit tests for everything outside claude_cockpit/ui
+python3 -m claude_cockpit                      # run it
 ```
 
 | Path | Contents |
 | --- | --- |
-| `cockpit/` | Usage parsing, the CLI runner, the cost estimator, the Cursor reader and the config. No UI, fully unit-tested. Mirrors `macos/Sources/CockpitCore`. |
-| `cockpit/ui/` | The GTK4 window, card and Personalize window. Mirrors `macos/Sources/ClaudeCockpit`. |
+| `claude_cockpit/` | Usage parsing, the CLI runner, the cost estimator, the Cursor reader and the config. No UI, fully unit-tested. Mirrors `macos/Sources/CockpitCore`. |
+| `claude_cockpit/ui/` | The GTK4 window, card and Personalize window. Mirrors `macos/Sources/ClaudeCockpit`. |
 | `tests/` | Unit tests. |
 | `packaging/` | Desktop entry and systemd user unit. |
 
-The modules under `cockpit/` are deliberate one-to-one ports of the Swift files in
+The modules under `claude_cockpit/` are deliberate one-to-one ports of the Swift files in
 `macos/Sources/CockpitCore`. When you change a rule in one — a price, a parser, a
 threshold — change it in both.

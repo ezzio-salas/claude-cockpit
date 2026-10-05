@@ -3,9 +3,9 @@ from datetime import datetime, timedelta, timezone
 
 import pytest
 
-from cockpit.cost import ClaudeCostEstimator
-from cockpit.pricing import cost_text, rates_for
-from cockpit.transcripts import replies_in
+from claude_cockpit.cost import ClaudeCostEstimator
+from claude_cockpit.pricing import cost_text, rates_for
+from claude_cockpit.transcripts import replies_in
 
 NOW = datetime(2026, 10, 5, 18, 0, tzinfo=timezone.utc)
 

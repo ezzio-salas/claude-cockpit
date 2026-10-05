@@ -8,13 +8,14 @@ by hand, at `$XDG_CONFIG_HOME/claude-cockpit/config.toml`.
 from __future__ import annotations
 
 import logging
-import os
 import re
 import tomllib
 from dataclasses import dataclass, replace
 from pathlib import Path
 
-log = logging.getLogger("cockpit.config")
+from .xdg import config_home
+
+log = logging.getLogger(__name__)
 
 DEFAULT_TITLE = "CLAUDE"
 #: The longest title that leaves room for the status note beside it.
@@ -26,8 +27,7 @@ _HEX = re.compile(r"#?([0-9A-Fa-f]{6})")
 
 
 def config_path() -> Path:
-    base = Path(os.environ.get("XDG_CONFIG_HOME", Path.home() / ".config"))
-    return base / "claude-cockpit/config.toml"
+    return config_home() / "claude-cockpit/config.toml"
 
 
 def normalize_hex(raw: object, fallback: str = COCKPIT_CYAN) -> str:
@@ -149,6 +149,14 @@ class SettingsStore:
             return {}
 
 
+#: The characters a TOML basic string cannot hold as they are.
+_ESCAPES = {
+    **{chr(code): f"\\u{code:04X}" for code in (*range(0x20), 0x7F)},
+    '"': '\\"',
+    "\\": "\\\\",
+}
+
+
 def _quote(value: str) -> str:
-    escaped = value.replace("\\", "\\\\").replace('"', '\\"')
-    return f'"{escaped}"'
+    """`value` as a TOML basic string."""
+    return '"' + "".join(_ESCAPES.get(character, character) for character in value) + '"'

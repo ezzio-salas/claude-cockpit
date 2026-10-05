@@ -107,8 +107,8 @@ macos/
   `week (<X>)` → `WEEK · <X>` uppercased; anything else → `<name>` uppercased.
   New rows therefore appear without code changes.
 - `<when>` has the form `<Mon> <d>[,][ at] <h>[:mm]<am|pm> (<IANA zone>)`. Claude Code has
-  written that separator both as ` at ` and as `, `, so both are accepted; a build that
-  takes only one of them silently loses every countdown. It is parsed in
+  writes that separator as ` at ` on some installs and as `, ` on others, so both are
+  accepted; a build that takes only one of them silently loses every countdown. It is parsed in
   the named zone. The year is not printed, so the parser picks the year that puts the
   date closest to `now`. If `<when>` does not match, the meter carries
   `.unparsed(<when>)` and the widget shows that text verbatim instead of a countdown.
@@ -262,22 +262,24 @@ The UI is verified manually: build the app, launch it, and compare the widget ag
 ## Linux
 
 The Linux build is a port, not a second design: the same meters, the same thresholds, the
-same refusal to show a number it did not read. `linux/cockpit/` mirrors `CockpitCore` file
-for file, and `linux/cockpit/ui/` replaces AppKit with GTK 4.
+same refusal to show a number it did not read. `linux/claude_cockpit/` mirrors `CockpitCore` file
+for file, and `linux/claude_cockpit/ui/` replaces AppKit with GTK 4.
 
 ```
 linux/
   pyproject.toml
   install.sh
   packaging/claude-cockpit.desktop, claude-cockpit.service
-  cockpit/
+  claude_cockpit/
     usage.py          # UsageMeter + UsageParser + ResetCountdown
     fetcher.py        # UsageFetcher
     transcripts.py    # TranscriptParser
     pricing.py        # ModelPricing
     cost.py           # ClaudeCostEstimator
     cursor_db.py      # CursorActivityReader
+    periods.py        # the week, and local midnight
     config.py         # CockpitAppearance + AppearanceStore
+    xdg.py            # the XDG base directories
     app.py            # AppDelegate
     ui/
       window.py       # CockpitPanel
@@ -306,9 +308,19 @@ temporary file and a rename so a crash cannot leave it half-written.
 
 **Finding the CLI.** The macOS search — `~/.local/bin`, Homebrew, then a login `zsh` —
 becomes `PATH` first, then `~/.local/bin`, the mise, asdf, volta and bun shim directories,
-`~/bin`, `/usr/local/bin`, `/usr/bin` and the Flatpak exports, then the login `$SHELL`.
-Version managers are how Claude Code is usually installed on Linux, and their shims are
-exactly what a desktop launcher's minimal `PATH` leaves out.
+nvm's Node versions, `~/bin`, `/usr/local/bin`, `/usr/bin` and the Flatpak exports, then
+the `PATH` of the login `$SHELL`. Version managers are how Claude Code is usually installed
+on Linux, and their shims are exactly what a desktop launcher's minimal `PATH` leaves out.
+The login shell is asked only to print its `PATH`, because a lookup written in shell
+(`command -v -- "$1"`) fails in fish and nushell. The CLI is then run with its own
+directory first on `PATH`, so an npm-installed one finds the `node` beside it.
+
+**Installing.** `install.sh` builds a virtual environment under
+`$XDG_DATA_HOME/claude-cockpit/venv` and links the command into `~/.local/bin`. Most
+distributions refuse `pip install --user` (PEP 668), and the environment sees the system
+site packages because GTK's bindings come from the distribution. The import package is
+`claude_cockpit` rather than `cockpit`, a name the Cockpit Project's own Python package
+already has.
 
 **Logging.** `os.Logger` becomes the standard library's logging to stderr, which systemd
 collects into the journal.
@@ -325,17 +337,19 @@ instead of starting a second poller. macOS leaves this to the user.
 Both were found by running the Linux build against live data, and both are fixed in the
 macOS build too:
 
-- **The reset wording.** Claude Code emits `resets Oct 5, 3:20pm (…)`, while the parser
-  expected `resets Oct 5 at 3:20pm (…)`. Every countdown was falling back to printing the
-  line verbatim. Both parsers now accept either separator.
+- **The reset wording.** The live output had `resets Oct 5, 3:20pm (…)` where the parser
+  expected `resets Oct 5 at 3:20pm (…)`, so every countdown fell back to printing the line
+  verbatim. Claude Code still prints the ` at ` wording as well, so neither is the old
+  one: both parsers accept either separator, and both branches have to stay.
 - **The partial-cost marker.** `unpricedModels` is collected over seven days but was shown
   against both rows, so a model used five days ago marked *today's* figure incomplete.
   `ClaudeCost` now carries a window each, with its own set of unpriced models.
 
 ### Testing
 
-`linux/tests` covers everything outside `cockpit/ui`, mirroring `Tests/CockpitCoreTests`
+`linux/tests` covers everything outside `claude_cockpit/ui`, mirroring `Tests/CockpitCoreTests`
 and adding: both reset separators, an unknown time zone, the per-window partial-cost rule,
-transcript re-reading (an unchanged file is not re-read, an appended one is), and the
-config round trip including a title containing a quote. The UI is verified by running the
-widget and comparing it against `claude -p "/usage"`.
+transcript re-reading (an unchanged file is not re-read, an appended one is), local
+midnight on the days the clocks change, the login-shell `PATH` lookup, and the config
+round trip including a title containing a quote or a control character. The UI is
+verified by running the widget and comparing it against `claude -p "/usage"`.

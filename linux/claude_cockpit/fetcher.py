@@ -10,15 +10,17 @@ from __future__ import annotations
 
 import logging
 import os
+import re
 import shutil
 import signal
 import subprocess
 import tempfile
-from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
 
-log = logging.getLogger("cockpit.fetcher")
+from .xdg import data_home
+
+log = logging.getLogger(__name__)
 
 #: Skips user hooks, plugins and MCP servers and saves no session, so a poll is quick
 #: and leaves nothing behind.
@@ -34,18 +36,32 @@ def install_directories() -> list[Path]:
     managers people actually install Claude Code with have to be named explicitly.
     """
     home = Path.home()
-    data = Path(os.environ.get("XDG_DATA_HOME", home / ".local/share"))
     return [
         home / ".local/bin",
-        data / "mise/shims",
+        data_home() / "mise/shims",
         home / ".asdf/shims",
         home / ".volta/bin",
         home / ".bun/bin",
+        *_nvm_directories(home),
         home / "bin",
         Path("/usr/local/bin"),
         Path("/usr/bin"),
         Path("/var/lib/flatpak/exports/bin"),
     ]
+
+
+def _nvm_directories(home: Path) -> list[Path]:
+    """The `bin` of each Node version nvm has installed, newest first.
+
+    nvm has no shim directory: it puts one of these on `PATH` from the shell's startup
+    file, which a desktop launcher never runs.
+    """
+    versions = Path(os.environ.get("NVM_DIR") or home / ".nvm") / "versions/node"
+    return sorted(
+        versions.glob("v*/bin"),
+        key=lambda directory: [int(part) for part in re.findall(r"\d+", directory.parent.name)],
+        reverse=True,
+    )
 
 
 class FetchErrorKind(Enum):
@@ -55,11 +71,14 @@ class FetchErrorKind(Enum):
     FAILED = "failed"
 
 
-@dataclass(frozen=True)
 class FetchError(Exception):
-    kind: FetchErrorKind
-    detail: str = ""
-    exit_code: int | None = None
+    def __init__(
+        self, kind: FetchErrorKind, detail: str = "", exit_code: int | None = None
+    ) -> None:
+        super().__init__(kind.value, detail, exit_code)
+        self.kind = kind
+        self.detail = detail
+        self.exit_code = exit_code
 
 
 def resolve(command: str, search_directories: list[Path] | None = None) -> Path | None:
@@ -73,7 +92,10 @@ def resolve(command: str, search_directories: list[Path] | None = None) -> Path 
         search_directories = install_directories()
 
     if "/" in command:
-        path = Path(command).expanduser()
+        try:
+            path = Path(command).expanduser()
+        except RuntimeError:  # `~name` for a user that does not exist.
+            return None
         return path if os.access(path, os.X_OK) and path.is_file() else None
 
     found = shutil.which(command)
@@ -89,13 +111,18 @@ def resolve(command: str, search_directories: list[Path] | None = None) -> Path 
 
 
 def _resolve_via_login_shell(command: str) -> Path | None:
+    """Looks `command` up on the `PATH` a login shell ends up with.
+
+    The shell is asked only to print `PATH`. A lookup written in shell would work in the
+    POSIX shells and fail in fish and nushell, which spell arguments differently; an
+    external `printenv` runs the same in all of them.
+    """
     shell = os.environ.get("SHELL") or "/bin/sh"
     if not os.access(shell, os.X_OK):
         shell = "/bin/sh"
     try:
-        # The name travels as an argument, never as shell source.
         result = subprocess.run(
-            [shell, "-lc", 'command -v -- "$1"', "sh", command],
+            [shell, "-lc", "printenv PATH"],
             capture_output=True,
             text=True,
             timeout=5,
@@ -103,12 +130,12 @@ def _resolve_via_login_shell(command: str) -> Path | None:
         )
     except (OSError, subprocess.SubprocessError):
         return None
-    if result.returncode != 0:
+    # A profile may print a greeting first; `PATH` is the last line.
+    lines = result.stdout.splitlines()
+    if result.returncode != 0 or not lines:
         return None
-    path = Path(result.stdout.strip()).expanduser()
-    if path.is_file() and os.access(path, os.X_OK):
-        return path
-    return None
+    found = shutil.which(command, path=lines[-1])
+    return Path(found) if found else None
 
 
 class UsageFetcher:
@@ -141,6 +168,7 @@ class UsageFetcher:
                     stdout=sink,
                     stderr=subprocess.STDOUT,
                     cwd=tempfile.gettempdir(),
+                    env=_environment_for(executable),
                     start_new_session=True,
                 )
             except OSError as error:
@@ -162,6 +190,16 @@ class UsageFetcher:
                 FetchErrorKind.FAILED, output, exit_code=process.returncode
             )
         return output
+
+
+def _environment_for(executable: Path) -> dict[str, str]:
+    """The environment with the CLI's own directory first on `PATH`.
+
+    A CLI installed through npm is a script that starts `node`, and under nvm `node` sits
+    beside it in a directory a desktop launcher's `PATH` does not have.
+    """
+    path = os.environ.get("PATH", os.defpath)
+    return {**os.environ, "PATH": f"{executable.parent}{os.pathsep}{path}"}
 
 
 def _kill_group(process: subprocess.Popen) -> None:

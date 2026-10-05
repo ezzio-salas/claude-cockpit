@@ -1,4 +1,4 @@
-"""Entry point: `python -m cockpit` or the `claude-cockpit` console script."""
+"""Entry point: `python -m claude_cockpit` or the `claude-cockpit` console script."""
 
 from __future__ import annotations
 

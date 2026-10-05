@@ -40,7 +40,7 @@ good one, dimmed and marked `STALE`, rather than guessing.
 ```
 claude-cockpit/
   macos/      Swift package: Sources/CockpitCore (logic) + Sources/ClaudeCockpit (AppKit)
-  linux/      Python package: cockpit/ (logic) + cockpit/ui/ (GTK 4)
+  linux/      Python package: claude_cockpit/ (logic) + claude_cockpit/ui/ (GTK 4)
   assets/     Orbitron, shared by both builds
   docs/       design.md, preview.png
 ```

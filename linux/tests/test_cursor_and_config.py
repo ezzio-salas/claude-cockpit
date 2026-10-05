@@ -3,8 +3,15 @@ from datetime import datetime, timedelta, timezone
 
 import pytest
 
-from cockpit.config import Appearance, Settings, SettingsStore, normalize_hex, normalize_title
-from cockpit.cursor_db import CursorActivityReader
+from claude_cockpit.config import (
+    Appearance,
+    Settings,
+    SettingsStore,
+    config_path,
+    normalize_hex,
+    normalize_title,
+)
+from claude_cockpit.cursor_db import CursorActivityReader
 
 NOW = datetime(2026, 10, 5, 18, 0, tzinfo=timezone.utc)
 
@@ -140,3 +147,27 @@ def test_a_title_with_a_quote_survives_the_round_trip(tmp_path):
     store = SettingsStore(tmp_path / "config.toml")
     store.save(Settings(appearance=Appearance(title='SAY "HI"')))
     assert store.load().appearance.title == 'SAY "HI"'
+
+
+def test_control_characters_survive_the_round_trip(tmp_path):
+    """Written raw, a newline makes the file unreadable and every setting falls back."""
+    store = SettingsStore(tmp_path / "config.toml")
+    written = Settings(
+        appearance=Appearance(title="A\nB\tC\x7f"),
+        cli_command="C:\\claude\x00",
+        has_offered_customization=True,
+    )
+    store.save(written)
+    assert store.load() == written
+
+
+@pytest.mark.parametrize("value", ["", "relative/config"])
+def test_an_empty_or_relative_xdg_config_home_is_ignored(tmp_path, monkeypatch, value):
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setenv("XDG_CONFIG_HOME", value)
+    assert config_path() == tmp_path / ".config/claude-cockpit/config.toml"
+
+
+def test_xdg_config_home_is_used_when_absolute(tmp_path, monkeypatch):
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
+    assert config_path() == tmp_path / "claude-cockpit/config.toml"

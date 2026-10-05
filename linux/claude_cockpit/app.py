@@ -10,6 +10,8 @@ from __future__ import annotations
 
 import logging
 import threading
+from concurrent.futures import ThreadPoolExecutor
+from dataclasses import replace
 from datetime import datetime, timezone
 
 import gi
@@ -26,7 +28,7 @@ from .ui.customize import CustomizeWindow  # noqa: E402
 from .ui.window import CockpitWindow  # noqa: E402
 from .usage import compact_duration, parse_usage  # noqa: E402
 
-log = logging.getLogger("cockpit.app")
+log = logging.getLogger(__name__)
 
 APP_ID = "dev.ezzio.ClaudeCockpit"
 REFRESH_INTERVAL = 60
@@ -98,12 +100,7 @@ class CockpitApplication(Gtk.Application):
         """The first launch offers personalization once; afterwards it is reached from the menu."""
         if self._settings.has_offered_customization:
             return
-        self._settings = Settings(
-            appearance=self._settings.appearance,
-            cli_command=self._settings.cli_command,
-            transcripts_directory=self._settings.transcripts_directory,
-            has_offered_customization=True,
-        )
+        self._settings = replace(self._settings, has_offered_customization=True)
         self._store.save(self._settings)
         self.show_customize()
 
@@ -139,30 +136,43 @@ class CockpitApplication(Gtk.Application):
         threading.Thread(target=self._poll, name="cockpit-poll", daemon=True).start()
 
     def _poll(self) -> None:
-        """Runs off the UI thread. Every result goes back through `GLib.idle_add`."""
+        """Runs off the UI thread. Every result goes back through `GLib.idle_add`.
+
+        The three reads run side by side, as they do on macOS, and none of them can raise:
+        a poll that died here would never reach `_finish_poll`, and the card would show
+        SYNC and refuse every later refresh.
+        """
         now = datetime.now(timezone.utc)
+        with ThreadPoolExecutor(max_workers=2, thread_name_prefix="cockpit-read") as pool:
+            cost = pool.submit(self._estimate_cost, now)
+            cursor = pool.submit(self._read_cursor, now)
+            usage, failure = self._fetch_usage()
+        GLib.idle_add(self._finish_poll, usage, failure, cost.result(), cursor.result(), now)
 
-        usage: str | None = None
-        failure: str | None = None
+    def _fetch_usage(self) -> tuple[str | None, str | None]:
+        """The CLI's output, or the message to show in its place."""
         try:
-            usage = self._fetcher.fetch()
+            return self._fetcher.fetch(), None
         except FetchError as error:
-            failure = message_for(error)
             log.error("Usage fetch failed: %s %s", error.kind.value, error.detail.strip()[:400])
+            return None, message_for(error)
+        except Exception:
+            log.exception("Usage fetch failed unexpectedly")
+            return None, "COULD NOT READ USAGE"
 
+    def _estimate_cost(self, now: datetime) -> ClaudeCost | None:
         try:
-            cost = self._estimator.estimate(now)
-        except OSError as error:
-            log.error("Cost estimate failed: %s", error)
-            cost = None
+            return self._estimator.estimate(now)
+        except Exception as error:
+            log.error("Cost estimate failed: %r", error)
+            return None
 
+    def _read_cursor(self, now: datetime) -> CursorActivity | None:
         try:
-            cursor = self._cursor_reader.read(now)
+            return self._cursor_reader.read(now)
         except Exception as error:  # sqlite3 raises several unrelated types.
-            log.error("Cursor activity read failed: %s", error)
-            cursor = None
-
-        GLib.idle_add(self._finish_poll, usage, failure, cost, cursor, now)
+            log.error("Cursor activity read failed: %r", error)
+            return None
 
     def _finish_poll(
         self,

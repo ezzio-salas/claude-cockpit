@@ -16,13 +16,13 @@ dependencies = []
 dev = ["pytest>=8"]
 
 [project.scripts]
-claude-cockpit = "cockpit.__main__:main"
+claude-cockpit = "claude_cockpit.__main__:main"
 
 [tool.setuptools.packages.find]
-include = ["cockpit*"]
+include = ["claude_cockpit*"]
 
 [tool.setuptools.package-data]
-cockpit = ["ui/*.css", "ui/*.ttf"]
+claude_cockpit = ["ui/*.css", "ui/*.ttf", "ui/Orbitron-OFL.txt"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
