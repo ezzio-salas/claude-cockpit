@@ -12,7 +12,9 @@ struct CockpitSnapshot {
     /// Short header note such as `SYNC` or `STALE · 2m`; empty when there is nothing to report.
     let status: String
     let isStale: Bool
-    /// Shown as its own section below the Claude meters; nil hides the section.
+    /// Shown as two rows under the meters; nil hides them.
+    let claudeCost: ClaudeCost?
+    /// Shown as its own section below the Claude rows; nil hides the section.
     let cursor: CursorActivity?
 }
 
@@ -33,6 +35,7 @@ final class CockpitView: NSView {
     private let glow = CALayer()
     private let statusLabel = NSTextField.label(NSAttributedString())
     private let bodyStack = NSStackView.column(spacing: 14)
+    private let costStack = NSStackView.column(spacing: 9)
     private let cursorStack = NSStackView.column(spacing: 9)
     private var drag: (mouseStart: NSPoint, windowStart: NSPoint, didMove: Bool)?
 
@@ -83,6 +86,16 @@ final class CockpitView: NSView {
         }
         bodyStack.alphaValue = snapshot.isStale ? 0.45 : 1
 
+        costStack.arrangedSubviews.forEach { $0.removeFromSuperview() }
+        costStack.isHidden = snapshot.claudeCost == nil
+        if let cost = snapshot.claudeCost {
+            let isPartial = !cost.unpricedModels.isEmpty
+            costStack.addFullWidth(Self.statRow("TODAY", value: Self.apiEquivalent(cost.today, isPartial: isPartial)))
+            costStack.addFullWidth(
+                Self.statRow("7 DAYS", value: Self.apiEquivalent(cost.last7Days, isPartial: isPartial))
+            )
+        }
+
         cursorStack.arrangedSubviews.forEach { $0.removeFromSuperview() }
         cursorStack.isHidden = snapshot.cursor == nil
         if let cursor = snapshot.cursor {
@@ -130,8 +143,9 @@ final class CockpitView: NSView {
         let content = NSStackView.column(spacing: 14)
         content.addFullWidth(NSStackView.splitRow(leading: Self.sectionTitle("CLAUDE"), trailing: statusLabel))
         content.addFullWidth(bodyStack)
+        content.addFullWidth(costStack)
         content.addFullWidth(cursorStack)
-        content.setCustomSpacing(20, after: bodyStack)
+        content.setCustomSpacing(20, after: costStack)
         return content
     }
 
@@ -152,9 +166,18 @@ final class CockpitView: NSView {
 
     /// `30 REQUESTS`, with the number emphasized.
     private static func requestCount(_ count: Int) -> NSAttributedString {
-        let value = NSMutableAttributedString(attributedString: statValue("\(count)", color: Theme.cyan))
+        emphasized("\(count)", unit: count == 1 ? "REQUEST" : "REQUESTS")
+    }
+
+    /// `~$140 API EQ`: what the usage would cost at API prices, which a subscription does not charge.
+    private static func apiEquivalent(_ dollars: Double, isPartial: Bool) -> NSAttributedString {
+        emphasized(CostText.text(dollars, isPartial: isPartial), unit: "API EQ")
+    }
+
+    private static func emphasized(_ figure: String, unit: String) -> NSAttributedString {
+        let value = NSMutableAttributedString(attributedString: statValue(figure, color: Theme.cyan))
         value.append(Theme.text(
-            count == 1 ? " REQUEST" : " REQUESTS",
+            " \(unit)",
             font: .monospacedSystemFont(ofSize: 9.5, weight: .regular), color: Theme.secondaryText, kern: 0.5
         ))
         return value

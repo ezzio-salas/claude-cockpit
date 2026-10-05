@@ -1,14 +1,16 @@
 # Claude Cockpit
 
 A small frameless macOS widget that floats above your windows and shows how much of your
-Claude plan you have used, plus how much you have been using Cursor's agent.
+Claude plan you have used, what that usage would cost at API prices, and how much you have
+been using Cursor's agent.
 
-<img src="docs/preview.png" alt="Claude Cockpit showing Claude usage meters and Cursor activity" width="288">
+<img src="docs/preview.png" alt="Claude Cockpit showing Claude usage meters, estimated cost and Cursor activity" width="288">
 
 It shows one meter for each limit that Claude Code's `/usage` command reports — the current
 session, the week, and any per-model weekly limit — with the percentage used and the time
-left until it resets. If you use [Cursor](https://cursor.com), a second section shows your
-agent activity there.
+left until it resets. Under the meters it estimates the API-equivalent cost of your recent
+Claude Code usage. If you use [Cursor](https://cursor.com), a second section shows your agent
+activity there.
 
 ## Requirements
 
@@ -76,6 +78,33 @@ The widget only ever shows numbers it actually read from Claude.
 | `COULD NOT READ USAGE` | The CLI exited with an error, for example when signed out. |
 | `UNRECOGNIZED OUTPUT` | The CLI answered, but without any usage lines. |
 
+## Estimated cost
+
+Two rows under the meters show what your Claude Code usage would have cost at Anthropic's
+API list prices:
+
+| Row | Meaning |
+| --- | --- |
+| `TODAY` | Usage since midnight, for example `~$8.40 API EQ`. |
+| `7 DAYS` | Usage over the last seven days. |
+
+`API EQ` stands for API equivalent. **It is not a charge.** A subscription is not billed per
+token, so this figure only tells you how much usage you are getting out of your plan.
+
+The estimate comes from the token counts Claude Code records in its transcripts
+(`~/.claude/projects`), multiplied by the price of the model that produced each reply.
+Keep in mind:
+
+- It covers Claude Code on this machine only, not other devices or claude.ai.
+- If several Claude profiles share one transcripts folder, their usage is added together.
+- Prices are built into the app (`Sources/CockpitCore/ModelPricing.swift`, as published in
+  September 2026) and need updating when Anthropic changes them. Fast mode is priced at
+  the standard rate.
+- A trailing `+`, as in `~$12+`, means some usage came from a model the app has no price
+  for, so the true figure is higher. The model's name is written to the log.
+
+The rows are hidden when the transcripts folder does not exist.
+
 ## Cursor activity
 
 When Cursor is installed, the card gains a **CURSOR** section:
@@ -129,6 +158,13 @@ widget does not run it with your shell's `PATH`. Make the script executable with
 defaults delete local.claude-cockpit cliCommand
 ```
 
+The [cost estimate](#estimated-cost) reads transcripts from `~/.claude/projects`. If your
+other profile keeps its own, point the estimate at them as well:
+
+```sh
+defaults write local.claude-cockpit transcriptsDirectory ~/.claude-work/projects
+```
+
 ## How it works
 
 Every refresh runs the Claude Code CLI without a terminal:
@@ -141,11 +177,14 @@ The extra flags keep the call light: no session is saved, and your hooks, plugin
 servers are not loaded. The widget parses the `Current …: N% used · resets …` lines from
 the output and ignores the rest.
 
-Cursor activity comes from a read-only query of Cursor's local SQLite database, described
-under [Cursor activity](#cursor-activity).
+The cost estimate reads only the token counts and model names from Claude Code's local
+transcripts, described under [Estimated cost](#estimated-cost). Cursor activity comes from
+a read-only query of Cursor's local SQLite database, described under
+[Cursor activity](#cursor-activity).
 
 The app never reads your credentials and makes no network requests of its own; signing in
-to Claude is handled entirely by the CLI, and the Cursor numbers never leave your machine.
+to Claude is handled entirely by the CLI, and the cost and Cursor numbers never leave your
+machine.
 
 ## Troubleshooting
 
@@ -173,7 +212,7 @@ of the `/usage` output. If that changes, the widget shows `UNRECOGNIZED OUTPUT` 
 ## Development
 
 ```sh
-swift test                # unit tests for parsing, countdowns, the CLI runner and the Cursor reader
+swift test                # unit tests for everything in CockpitCore
 swift run ClaudeCockpit   # run without building the .app bundle
 ./build.sh                # build ClaudeCockpit.app
 ```
@@ -183,7 +222,7 @@ bundled into the `.app`.
 
 | Path | Contents |
 | --- | --- |
-| `Sources/CockpitCore` | Parsing, countdown text, the CLI runner and the Cursor reader. No UI, fully unit-tested. |
+| `Sources/CockpitCore` | Usage parsing, the CLI runner, the cost estimator and the Cursor reader. No UI, fully unit-tested. |
 | `Sources/ClaudeCockpit` | The AppKit panel and views. |
 | `Tests/CockpitCoreTests` | Unit tests. |
 | `Resources` | The Orbitron font and its license. |

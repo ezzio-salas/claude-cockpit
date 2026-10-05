@@ -2,7 +2,7 @@ import AppKit
 import CockpitCore
 import os
 
-/// Polls Claude for usage and Cursor for activity, and keeps the panel showing the latest good readings.
+/// Polls Claude for usage and cost and Cursor for activity, and keeps the panel showing the latest good readings.
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private static let refreshInterval: TimeInterval = 60
     /// Countdowns and the stale age move on without a fetch.
@@ -11,12 +11,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let log = Logger(subsystem: "local.claude-cockpit", category: "usage")
     /// `defaults write local.claude-cockpit cliCommand <name or path>` points the widget at another CLI.
     private let fetcher = UsageFetcher(command: UserDefaults.standard.string(forKey: "cliCommand") ?? "claude")
+    /// `defaults write local.claude-cockpit transcriptsDirectory <path>` points the cost estimate at the
+    /// transcripts of a Claude profile that keeps its own config directory.
+    private let costEstimator = ClaudeCostEstimator(
+        transcripts: UserDefaults.standard.string(forKey: "transcriptsDirectory")
+            .map { URL(fileURLWithPath: ($0 as NSString).expandingTildeInPath) }
+            ?? ClaudeCostEstimator.defaultTranscripts
+    )
     private let cursorReader = CursorActivityReader()
     private lazy var panel = CockpitPanel(menu: makeMenu(), onClick: { [weak self] in self?.refresh() })
 
     private var lastReading: (meters: [UsageMeter], takenAt: Date)?
     /// Why the most recent fetch failed; nil after a success.
     private var failure: String?
+    /// Nil when there are no Claude Code transcripts on this machine.
+    private var claudeCost: ClaudeCost?
     /// Nil when Cursor is not in use on this machine or its database could not be read.
     private var cursorActivity: CursorActivity?
     private var isFetching = false
@@ -37,8 +46,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         render()
 
         Task { @MainActor in
-            let result = await fetcher.fetch()
-            cursorActivity = await readCursorActivity()
+            async let usage = fetcher.fetch()
+            async let cost = costEstimator.estimate(now: Date())
+            async let activity = readCursorActivity()
+            let result = await usage
+            let estimate = await cost
+            if let unpriced = estimate?.unpricedModels, !unpriced.isEmpty, unpriced != claudeCost?.unpricedModels {
+                log.notice("Cost estimate omits models with no known price: \(unpriced.joined(separator: ", "), privacy: .public)")
+            }
+            claudeCost = estimate
+            cursorActivity = await activity
             isFetching = false
             record(result)
             render()
@@ -91,7 +108,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             body = .message(failure ?? "READING USAGE")
         }
         panel.render(
-            CockpitSnapshot(body: body, status: status, isStale: isStale, cursor: cursorActivity), now: now
+            CockpitSnapshot(
+                body: body, status: status, isStale: isStale, claudeCost: claudeCost, cursor: cursorActivity
+            ),
+            now: now
         )
     }
 

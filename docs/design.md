@@ -69,6 +69,9 @@ claude_cockpit/
       ResetCountdown.swift
       UsageFetcher.swift
       CursorActivity.swift
+      ModelPricing.swift
+      TranscriptParser.swift
+      ClaudeCostEstimator.swift
     ClaudeCockpit/              # executable: window and drawing
       main.swift
       AppDelegate.swift
@@ -132,6 +135,28 @@ and `resets now` once the time has passed.
 - Returns nil when the database does not exist; the widget then hides the Cursor
   section. Any other failure throws, is logged, and also hides the section.
 
+**`ClaudeCostEstimator`** — `estimate(now:calendar:) -> ClaudeCost?` (an actor).
+
+- Added after the first version. A subscription has no per-token bill and `/cost` prints
+  no amounts there, so the widget shows what the usage would cost at API list prices,
+  labeled `API EQ`.
+- Source: the JSON Lines transcripts under `~/.claude/projects` (overridable with the
+  `transcriptsDirectory` user default). Each assistant line carries the model and its
+  token counts: input, output, cache read, and cache writes split into five-minute and
+  one-hour kinds.
+- `TranscriptParser` extracts those lines. A reply is written once per content block and
+  again in transcripts that resume its session, so replies are merged by message id plus
+  request id, keeping the line with the most output tokens.
+- `ModelPricing` maps a model id to its prices per million tokens; a dated snapshot id is
+  priced as its base model. A model with no entry is not guessed at: its usage is left
+  out and its name is reported in `ClaudeCost.unpricedModels`, which the widget shows as
+  a trailing `+`.
+- `ClaudeCost` holds dollars since local midnight and over the last seven days.
+- Only transcripts modified in the last seven days are read, and parsed files are cached
+  by modification date and size, so a refresh re-reads only the sessions that changed.
+- Returns nil when the transcripts directory does not exist; the widget then hides the
+  cost rows.
+
 ### ClaudeCockpit (UI)
 
 **Window** — `NSPanel`, style `[.borderless, .nonactivatingPanel]`, level `.floating`,
@@ -153,7 +178,9 @@ first launch places it near the top-right of the main screen.
 - Orbitron is registered from the bundled file at launch; if that fails the app
   falls back to the system monospaced font.
 
-- Below the meters, when Cursor activity is available: a `CURSOR` title and three
+- Under the meters, when a cost estimate is available: `TODAY` and `7 DAYS` rows such as
+  `~$8.40 API EQ`. These are not dimmed when the Claude reading is stale.
+- Below that, when Cursor activity is available: a `CURSOR` title and three
   label/value rows (`TODAY`, `7 DAYS`, `TOP MODEL`). This section is not dimmed when the
   Claude reading is stale.
 
