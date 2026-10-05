@@ -12,6 +12,8 @@ struct CockpitSnapshot {
     /// Short header note such as `SYNC` or `STALE · 2m`; empty when there is nothing to report.
     let status: String
     let isStale: Bool
+    /// Shown as its own section below the Claude meters; nil hides the section.
+    let cursor: CursorActivity?
 }
 
 /// The glass card. Dragging it moves the window; a plain click reports `onClick`.
@@ -31,6 +33,7 @@ final class CockpitView: NSView {
     private let glow = CALayer()
     private let statusLabel = NSTextField.label(NSAttributedString())
     private let bodyStack = NSStackView.column(spacing: 14)
+    private let cursorStack = NSStackView.column(spacing: 9)
     private var drag: (mouseStart: NSPoint, windowStart: NSPoint, didMove: Bool)?
 
     init() {
@@ -79,6 +82,17 @@ final class CockpitView: NSView {
             )))
         }
         bodyStack.alphaValue = snapshot.isStale ? 0.45 : 1
+
+        cursorStack.arrangedSubviews.forEach { $0.removeFromSuperview() }
+        cursorStack.isHidden = snapshot.cursor == nil
+        if let cursor = snapshot.cursor {
+            cursorStack.addFullWidth(Self.sectionTitle("CURSOR"))
+            cursorStack.addFullWidth(Self.statRow("TODAY", value: Self.requestCount(cursor.requestsToday)))
+            cursorStack.addFullWidth(Self.statRow("7 DAYS", value: Self.requestCount(cursor.requestsLast7Days)))
+            if let model = cursor.topModel {
+                cursorStack.addFullWidth(Self.statRow("TOP MODEL", value: Self.statValue(model.uppercased())))
+            }
+        }
     }
 
     // MARK: - Construction
@@ -113,13 +127,37 @@ final class CockpitView: NSView {
     }
 
     private func makeContent() -> NSView {
-        let title = NSTextField.label(Theme.text(
-            "CLAUDE", font: Theme.displayFont(size: 11, weight: .bold), color: Theme.cyan, kern: 3
-        ))
         let content = NSStackView.column(spacing: 14)
-        content.addFullWidth(NSStackView.splitRow(leading: title, trailing: statusLabel))
+        content.addFullWidth(NSStackView.splitRow(leading: Self.sectionTitle("CLAUDE"), trailing: statusLabel))
         content.addFullWidth(bodyStack)
+        content.addFullWidth(cursorStack)
+        content.setCustomSpacing(20, after: bodyStack)
         return content
+    }
+
+    private static func sectionTitle(_ name: String) -> NSTextField {
+        .label(Theme.text(name, font: Theme.displayFont(size: 11, weight: .bold), color: Theme.cyan, kern: 3))
+    }
+
+    private static func statRow(_ name: String, value: NSAttributedString) -> NSView {
+        let label = NSTextField.label(Theme.text(
+            name, font: Theme.displayFont(size: 10), color: Theme.primaryText, kern: 1.5
+        ))
+        return NSStackView.splitRow(leading: label, trailing: NSTextField.label(value))
+    }
+
+    private static func statValue(_ text: String, color: NSColor = Theme.primaryText) -> NSAttributedString {
+        Theme.text(text, font: .monospacedSystemFont(ofSize: 11, weight: .medium), color: color, kern: 0.5)
+    }
+
+    /// `30 REQUESTS`, with the number emphasized.
+    private static func requestCount(_ count: Int) -> NSAttributedString {
+        let value = NSMutableAttributedString(attributedString: statValue("\(count)", color: Theme.cyan))
+        value.append(Theme.text(
+            count == 1 ? " REQUEST" : " REQUESTS",
+            font: .monospacedSystemFont(ofSize: 9.5, weight: .regular), color: Theme.secondaryText, kern: 0.5
+        ))
+        return value
     }
 
     private static func roundedMask(radius: CGFloat) -> NSImage {

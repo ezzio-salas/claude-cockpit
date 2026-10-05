@@ -2,7 +2,7 @@ import AppKit
 import CockpitCore
 import os
 
-/// Polls Claude for usage and keeps the panel showing the latest good reading.
+/// Polls Claude for usage and Cursor for activity, and keeps the panel showing the latest good readings.
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private static let refreshInterval: TimeInterval = 60
     /// Countdowns and the stale age move on without a fetch.
@@ -11,11 +11,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let log = Logger(subsystem: "local.claude-cockpit", category: "usage")
     /// `defaults write local.claude-cockpit cliCommand <name or path>` points the widget at another CLI.
     private let fetcher = UsageFetcher(command: UserDefaults.standard.string(forKey: "cliCommand") ?? "claude")
+    private let cursorReader = CursorActivityReader()
     private lazy var panel = CockpitPanel(menu: makeMenu(), onClick: { [weak self] in self?.refresh() })
 
     private var lastReading: (meters: [UsageMeter], takenAt: Date)?
     /// Why the most recent fetch failed; nil after a success.
     private var failure: String?
+    /// Nil when Cursor is not in use on this machine or its database could not be read.
+    private var cursorActivity: CursorActivity?
     private var isFetching = false
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -35,9 +38,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         Task { @MainActor in
             let result = await fetcher.fetch()
+            cursorActivity = await readCursorActivity()
             isFetching = false
             record(result)
             render()
+        }
+    }
+
+    private func readCursorActivity() async -> CursorActivity? {
+        let reader = cursorReader
+        do {
+            return try await Task.detached(priority: .utility) { try reader.read(now: Date()) }.value
+        } catch {
+            log.error("Cursor activity read failed: \(String(describing: error), privacy: .public)")
+            return nil
         }
     }
 
@@ -76,7 +90,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         } else {
             body = .message(failure ?? "READING USAGE")
         }
-        panel.render(CockpitSnapshot(body: body, status: status, isStale: isStale), now: now)
+        panel.render(
+            CockpitSnapshot(body: body, status: status, isStale: isStale, cursor: cursorActivity), now: now
+        )
     }
 
     private func makeMenu() -> NSMenu {

@@ -68,6 +68,7 @@ claude_cockpit/
       UsageParser.swift
       ResetCountdown.swift
       UsageFetcher.swift
+      CursorActivity.swift
     ClaudeCockpit/              # executable: window and drawing
       main.swift
       AppDelegate.swift
@@ -118,6 +119,19 @@ and `resets now` once the time has passed.
   `.failed(exitCode:output:)`. Failures are logged under the `local.claude-cockpit`
   subsystem.
 
+**`CursorActivityReader`** — `read(now:calendar:) throws -> CursorActivity?`.
+
+- Added after the first version, for people who also use Cursor. Cursor has no local
+  command that reports plan usage, and reading it from Cursor's servers would mean
+  handling the user's access token, so the widget shows local activity instead.
+- Source: `~/.cursor/ai-tracking/ai-code-tracking.db`, the SQLite database Cursor keeps
+  for attributing code to AI. It is opened read-only with a one-second busy timeout.
+- `CursorActivity` holds agent requests today (since local midnight), requests in the
+  last seven days, and the model behind the most requests in that week. A request is a
+  distinct `requestId` in `ai_code_hashes`, excluding rows whose `source` is `human`.
+- Returns nil when the database does not exist; the widget then hides the Cursor
+  section. Any other failure throws, is logged, and also hides the section.
+
 ### ClaudeCockpit (UI)
 
 **Window** — `NSPanel`, style `[.borderless, .nonactivatingPanel]`, level `.floating`,
@@ -138,6 +152,10 @@ first launch places it near the top-right of the main screen.
 - Bar and percentage color: cyan below 70%, amber from 70%, red from 90%.
 - Orbitron is registered from the bundled file at launch; if that fails the app
   falls back to the system monospaced font.
+
+- Below the meters, when Cursor activity is available: a `CURSOR` title and three
+  label/value rows (`TODAY`, `7 DAYS`, `TOP MODEL`). This section is not dimmed when the
+  Claude reading is stale.
 
 **Interaction**
 

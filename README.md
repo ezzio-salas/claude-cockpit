@@ -1,13 +1,14 @@
 # Claude Cockpit
 
 A small frameless macOS widget that floats above your windows and shows how much of your
-Claude plan you have used.
+Claude plan you have used, plus how much you have been using Cursor's agent.
 
-<img src="docs/preview.png" alt="Claude Cockpit showing session and weekly usage meters" width="288">
+<img src="docs/preview.png" alt="Claude Cockpit showing Claude usage meters and Cursor activity" width="288">
 
 It shows one meter for each limit that Claude Code's `/usage` command reports — the current
 session, the week, and any per-model weekly limit — with the percentage used and the time
-left until it resets.
+left until it resets. If you use [Cursor](https://cursor.com), a second section shows your
+agent activity there.
 
 ## Requirements
 
@@ -75,6 +76,28 @@ The widget only ever shows numbers it actually read from Claude.
 | `COULD NOT READ USAGE` | The CLI exited with an error, for example when signed out. |
 | `UNRECOGNIZED OUTPUT` | The CLI answered, but without any usage lines. |
 
+## Cursor activity
+
+When Cursor is installed, the card gains a **CURSOR** section:
+
+| Row | Meaning |
+| --- | --- |
+| `TODAY` | Agent requests since midnight that produced code. |
+| `7 DAYS` | The same count over the last seven days. |
+| `TOP MODEL` | The model behind the most of those requests in the last seven days. |
+
+These numbers are activity, not a quota. Cursor has no local equivalent of Claude's
+`/usage`, so the widget counts requests from the database Cursor keeps on your machine
+for attributing code to AI (`~/.cursor/ai-tracking/ai-code-tracking.db`). That has two
+consequences:
+
+- Only requests that wrote code are counted. Questions the agent answered without
+  editing a file do not appear.
+- Only this machine is counted, not other devices or Cursor's web agents.
+
+The section needs no setup and is hidden when that database does not exist. It refreshes
+together with the Claude meters.
+
 ## Using another Claude profile
 
 By default the widget runs `claude`. To read usage for a different account or config
@@ -118,8 +141,11 @@ The extra flags keep the call light: no session is saved, and your hooks, plugin
 servers are not loaded. The widget parses the `Current …: N% used · resets …` lines from
 the output and ignores the rest.
 
+Cursor activity comes from a read-only query of Cursor's local SQLite database, described
+under [Cursor activity](#cursor-activity).
+
 The app never reads your credentials and makes no network requests of its own; signing in
-is handled entirely by the CLI.
+to Claude is handled entirely by the CLI, and the Cursor numbers never leave your machine.
 
 ## Troubleshooting
 
@@ -147,7 +173,7 @@ of the `/usage` output. If that changes, the widget shows `UNRECOGNIZED OUTPUT` 
 ## Development
 
 ```sh
-swift test                # unit tests for parsing, countdowns and the CLI runner
+swift test                # unit tests for parsing, countdowns, the CLI runner and the Cursor reader
 swift run ClaudeCockpit   # run without building the .app bundle
 ./build.sh                # build ClaudeCockpit.app
 ```
@@ -157,7 +183,7 @@ bundled into the `.app`.
 
 | Path | Contents |
 | --- | --- |
-| `Sources/CockpitCore` | Parsing, countdown text and the CLI runner. No UI, fully unit-tested. |
+| `Sources/CockpitCore` | Parsing, countdown text, the CLI runner and the Cursor reader. No UI, fully unit-tested. |
 | `Sources/ClaudeCockpit` | The AppKit panel and views. |
 | `Tests/CockpitCoreTests` | Unit tests. |
 | `Resources` | The Orbitron font and its license. |
