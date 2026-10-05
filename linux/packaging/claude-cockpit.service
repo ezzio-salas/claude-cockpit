@@ -1,0 +1,15 @@
+# Starts the widget with the graphical session.
+#   systemctl --user enable --now claude-cockpit.service
+[Unit]
+Description=Claude Cockpit
+PartOf=graphical-session.target
+After=graphical-session.target
+
+[Service]
+Type=simple
+ExecStart=%h/.local/bin/claude-cockpit
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=graphical-session.target

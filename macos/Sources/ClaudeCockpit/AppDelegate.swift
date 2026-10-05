@@ -70,7 +70,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             async let activity = readCursorActivity()
             let result = await usage
             let estimate = await cost
-            if let unpriced = estimate?.unpricedModels, !unpriced.isEmpty, unpriced != claudeCost?.unpricedModels {
+            let unpriced = estimate?.last7Days.unpricedModels ?? []
+            if !unpriced.isEmpty, unpriced != claudeCost?.last7Days.unpricedModels {
                 log.notice("Cost estimate omits models with no known price: \(unpriced.joined(separator: ", "), privacy: .public)")
             }
             claudeCost = estimate

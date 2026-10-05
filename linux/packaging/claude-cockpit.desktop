@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=Claude Cockpit
+Comment=Floating Claude Code usage widget
+Exec=claude-cockpit
+Icon=utilities-system-monitor
+Terminal=false
+Categories=Utility;Monitor;
+StartupWMClass=dev.ezzio.ClaudeCockpit

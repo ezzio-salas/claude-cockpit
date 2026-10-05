@@ -116,7 +116,7 @@ final class ClaudeCostEstimatorTests: XCTestCase {
         let cost = await estimate()
 
         // Opus 5.5: $4 input + $20 output + $0.20 cache read + $5 and $8 cache writes.
-        XCTAssertEqual(try XCTUnwrap(cost).last7Days, 37.20, accuracy: 0.0001)
+        XCTAssertEqual(try XCTUnwrap(cost).last7Days.dollars, 37.20, accuracy: 0.0001)
     }
 
     func testEachModelIsPricedAtItsOwnRates() async throws {
@@ -127,7 +127,7 @@ final class ClaudeCostEstimatorTests: XCTestCase {
 
         let cost = await estimate()
 
-        XCTAssertEqual(try XCTUnwrap(cost).last7Days, 20 + 50, accuracy: 0.0001)
+        XCTAssertEqual(try XCTUnwrap(cost).last7Days.dollars, 20 + 50, accuracy: 0.0001)
     }
 
     func testReplyWrittenAsSeveralLinesIsCountedOnceAtItsFinalSize() async throws {
@@ -139,7 +139,7 @@ final class ClaudeCostEstimatorTests: XCTestCase {
 
         let cost = await estimate()
 
-        XCTAssertEqual(try XCTUnwrap(cost).last7Days, 4 + 10, accuracy: 0.0001)
+        XCTAssertEqual(try XCTUnwrap(cost).last7Days.dollars, 4 + 10, accuracy: 0.0001)
     }
 
     func testReplyCopiedIntoAResumedSessionIsCountedOnce() async throws {
@@ -148,7 +148,7 @@ final class ClaudeCostEstimatorTests: XCTestCase {
 
         let cost = await estimate()
 
-        XCTAssertEqual(try XCTUnwrap(cost).last7Days, 40, accuracy: 0.0001)
+        XCTAssertEqual(try XCTUnwrap(cost).last7Days.dollars, 40, accuracy: 0.0001)
     }
 
     func testTodayStartsAtMidnightAndTheWeekReachesBackSevenDays() async throws {
@@ -162,8 +162,8 @@ final class ClaudeCostEstimatorTests: XCTestCase {
         let estimated = await estimate()
         let cost = try XCTUnwrap(estimated)
 
-        XCTAssertEqual(cost.today, 20, accuracy: 0.0001)
-        XCTAssertEqual(cost.last7Days, 60, accuracy: 0.0001)
+        XCTAssertEqual(cost.today.dollars, 20, accuracy: 0.0001)
+        XCTAssertEqual(cost.last7Days.dollars, 60, accuracy: 0.0001)
     }
 
     func testSubagentTranscriptsInNestedFoldersAreIncluded() async throws {
@@ -172,7 +172,7 @@ final class ClaudeCostEstimatorTests: XCTestCase {
 
         let cost = await estimate()
 
-        XCTAssertEqual(try XCTUnwrap(cost).last7Days, 40, accuracy: 0.0001)
+        XCTAssertEqual(try XCTUnwrap(cost).last7Days.dollars, 40, accuracy: 0.0001)
     }
 
     func testModelWithoutAPriceIsReportedAndLeftOutOfTheTotals() async throws {
@@ -183,7 +183,26 @@ final class ClaudeCostEstimatorTests: XCTestCase {
 
         let cost = await estimate()
 
-        XCTAssertEqual(cost, ClaudeCost(today: 20, last7Days: 20, unpricedModels: ["claude-future-9"]))
+        XCTAssertEqual(cost, ClaudeCost(
+            today: CostWindow(dollars: 20, unpricedModels: ["claude-future-9"]),
+            last7Days: CostWindow(dollars: 20, unpricedModels: ["claude-future-9"])
+        ))
+    }
+
+    /// An unpriced model used earlier in the week must not mark today's figure incomplete.
+    func testAnUnpricedModelMarksOnlyThePeriodItWasUsedIn() async throws {
+        try write([
+            try reply("today", output: 1_000_000),
+            try reply("days-ago", model: "claude-future-9", hoursAgo: 4 * 24, output: 1_000_000),
+        ], to: "project/session.jsonl")
+
+        let estimated = await estimate()
+        let cost = try XCTUnwrap(estimated)
+
+        XCTAssertEqual(cost.last7Days.unpricedModels, ["claude-future-9"])
+        XCTAssertTrue(cost.last7Days.isPartial)
+        XCTAssertEqual(cost.today.unpricedModels, [])
+        XCTAssertFalse(cost.today.isPartial)
     }
 
     func testLinesThatAreNotFinishedRepliesAreIgnored() async throws {
@@ -196,7 +215,7 @@ final class ClaudeCostEstimatorTests: XCTestCase {
 
         let cost = await estimate()
 
-        XCTAssertEqual(cost, ClaudeCost(today: 20, last7Days: 20, unpricedModels: []))
+        XCTAssertEqual(cost, ClaudeCost(today: CostWindow(dollars: 20), last7Days: CostWindow(dollars: 20)))
     }
 
     func testRepliesAddedSinceTheLastEstimateAreCounted() async throws {
@@ -207,14 +226,14 @@ final class ClaudeCostEstimatorTests: XCTestCase {
         try write([try reply("a", output: 1_000_000), try reply("b", output: 1_000_000)], to: "project/session.jsonl")
         let after = await estimate(with: estimator)
 
-        XCTAssertEqual(try XCTUnwrap(before).last7Days, 20, accuracy: 0.0001)
-        XCTAssertEqual(try XCTUnwrap(after).last7Days, 40, accuracy: 0.0001)
+        XCTAssertEqual(try XCTUnwrap(before).last7Days.dollars, 20, accuracy: 0.0001)
+        XCTAssertEqual(try XCTUnwrap(after).last7Days.dollars, 40, accuracy: 0.0001)
     }
 
     func testNoTranscriptsIsZeroCost() async {
         let cost = await estimate()
 
-        XCTAssertEqual(cost, ClaudeCost(today: 0, last7Days: 0, unpricedModels: []))
+        XCTAssertEqual(cost, ClaudeCost(today: CostWindow(dollars: 0), last7Days: CostWindow(dollars: 0)))
     }
 
     func testMissingDirectoryMeansThereIsNothingToEstimate() async {

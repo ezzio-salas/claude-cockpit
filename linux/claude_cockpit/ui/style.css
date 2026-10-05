@@ -1,0 +1,145 @@
+/* The glass card. Colors that a person can change arrive as @cockpit_* definitions from
+   `palette_css()` in card.py; everything structural lives here. */
+
+window.cockpit {
+  background: transparent;
+}
+
+/* Transparent space around the card where its glow is drawn. */
+.cockpit-root {
+  padding: 14px;
+}
+
+.cockpit-card {
+  background-color: rgba(5, 10, 18, 0.72);
+  border: 1px solid alpha(@cockpit_border, 0.45);
+  border-radius: 16px;
+  padding: 16px;
+  box-shadow: 0 0 9px 1px alpha(@cockpit_glow, 0.55);
+}
+
+/* The card is one drag and click target, so nothing inside takes a hover state. */
+.cockpit-card * {
+  outline: none;
+}
+
+.cockpit-section-title {
+  font-family: "Orbitron", monospace;
+  font-size: 11px;
+  font-weight: bold;
+  letter-spacing: 3px;
+  color: @cockpit_accent;
+}
+
+.cockpit-status {
+  font-family: "Orbitron", monospace;
+  font-size: 8px;
+  letter-spacing: 1.5px;
+  color: alpha(@cockpit_accent, 0.6);
+}
+
+.cockpit-status.stale {
+  color: @cockpit_amber;
+}
+
+.cockpit-message {
+  font-family: "Orbitron", monospace;
+  font-size: 9px;
+  letter-spacing: 1.5px;
+  color: rgba(255, 255, 255, 0.78);
+}
+
+/* Meters */
+
+.cockpit-meter-label {
+  font-family: "Orbitron", monospace;
+  font-size: 10px;
+  letter-spacing: 1.5px;
+  color: rgba(255, 255, 255, 0.78);
+}
+
+.cockpit-meter-percent {
+  font-family: monospace;
+  font-size: 19px;
+  font-weight: bold;
+  color: @cockpit_accent;
+}
+
+.cockpit-meter-reset {
+  font-family: "Orbitron", monospace;
+  font-size: 9px;
+  letter-spacing: 1.2px;
+  color: rgba(255, 255, 255, 0.42);
+}
+
+progressbar.cockpit-bar {
+  min-height: 4px;
+}
+
+progressbar.cockpit-bar trough {
+  min-height: 4px;
+  border: none;
+  border-radius: 2px;
+  background-color: rgba(255, 255, 255, 0.12);
+}
+
+progressbar.cockpit-bar progress {
+  min-width: 4px;
+  min-height: 4px;
+  border: none;
+  border-radius: 2px;
+  background-color: @cockpit_accent;
+}
+
+/* Warning levels keep their own colors whatever accent is chosen,
+   because there the color is the warning. */
+
+.cockpit-meter-percent.elevated,
+progressbar.cockpit-bar.elevated progress {
+  color: @cockpit_amber;
+  background-color: @cockpit_amber;
+}
+
+.cockpit-meter-percent.critical,
+progressbar.cockpit-bar.critical progress {
+  color: @cockpit_red;
+  background-color: @cockpit_red;
+}
+
+/* Stat rows: TODAY / 7 DAYS / TOP MODEL */
+
+.cockpit-stat-label {
+  font-family: "Orbitron", monospace;
+  font-size: 10px;
+  letter-spacing: 1.5px;
+  color: rgba(255, 255, 255, 0.78);
+}
+
+.cockpit-stat-figure {
+  font-family: monospace;
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.5px;
+  color: @cockpit_accent;
+}
+
+.cockpit-stat-plain {
+  font-family: monospace;
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.5px;
+  color: rgba(255, 255, 255, 0.78);
+}
+
+.cockpit-stat-unit {
+  font-family: monospace;
+  font-size: 9px;
+  letter-spacing: 0.5px;
+  color: rgba(255, 255, 255, 0.42);
+}
+
+/* A stale Claude reading dims the meters. The cost and Cursor rows are read
+   from local files and are never stale, so they keep their opacity. */
+.cockpit-stale {
+  opacity: 0.45;
+}
