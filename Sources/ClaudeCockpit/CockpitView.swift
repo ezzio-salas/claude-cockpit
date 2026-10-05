@@ -39,6 +39,7 @@ final class CockpitView: NSView {
     private let bodyStack = NSStackView.column(spacing: 14)
     private let costStack = NSStackView.column(spacing: 9)
     private let cursorStack = NSStackView.column(spacing: 9)
+    private var accent = NSColor(CockpitAppearance.standard.accent)
     private var drag: (mouseStart: NSPoint, windowStart: NSPoint, didMove: Bool)?
 
     init() {
@@ -67,8 +68,10 @@ final class CockpitView: NSView {
         fatalError("init(coder:) is not supported")
     }
 
+    /// Takes effect on the title, border and glow at once, and on the rest of the card at the next `render`.
     func apply(_ appearance: CockpitAppearance) {
-        titleLabel.attributedStringValue = Self.sectionTitleText(appearance.title)
+        accent = NSColor(appearance.accent)
+        titleLabel.attributedStringValue = sectionTitleText(appearance.title)
         surface.layer?.borderColor = NSColor(appearance.border).withAlphaComponent(0.45).cgColor
         glow.shadowColor = NSColor(appearance.glow).cgColor
     }
@@ -77,7 +80,7 @@ final class CockpitView: NSView {
         statusLabel.attributedStringValue = Theme.text(
             snapshot.status,
             font: Theme.displayFont(size: 8),
-            color: snapshot.isStale ? Theme.amber : Theme.cyan.withAlphaComponent(0.6),
+            color: snapshot.isStale ? Theme.amber : accent.withAlphaComponent(0.6),
             kern: 1.5
         )
         // An empty label still has a default line height, which would nudge the header as the status comes and goes.
@@ -86,7 +89,7 @@ final class CockpitView: NSView {
         bodyStack.arrangedSubviews.forEach { $0.removeFromSuperview() }
         switch snapshot.body {
         case .meters(let meters):
-            meters.forEach { bodyStack.addFullWidth(MeterRowView(meter: $0, now: now)) }
+            meters.forEach { bodyStack.addFullWidth(MeterRowView(meter: $0, now: now, accent: accent)) }
         case .message(let message):
             bodyStack.addFullWidth(NSTextField.label(Theme.text(
                 message, font: Theme.displayFont(size: 9), color: Theme.primaryText, kern: 1.5
@@ -98,18 +101,18 @@ final class CockpitView: NSView {
         costStack.isHidden = snapshot.claudeCost == nil
         if let cost = snapshot.claudeCost {
             let isPartial = !cost.unpricedModels.isEmpty
-            costStack.addFullWidth(Self.statRow("TODAY", value: Self.apiEquivalent(cost.today, isPartial: isPartial)))
+            costStack.addFullWidth(Self.statRow("TODAY", value: apiEquivalent(cost.today, isPartial: isPartial)))
             costStack.addFullWidth(
-                Self.statRow("7 DAYS", value: Self.apiEquivalent(cost.last7Days, isPartial: isPartial))
+                Self.statRow("7 DAYS", value: apiEquivalent(cost.last7Days, isPartial: isPartial))
             )
         }
 
         cursorStack.arrangedSubviews.forEach { $0.removeFromSuperview() }
         cursorStack.isHidden = snapshot.cursor == nil
         if let cursor = snapshot.cursor {
-            cursorStack.addFullWidth(Self.sectionTitle("CURSOR"))
-            cursorStack.addFullWidth(Self.statRow("TODAY", value: Self.requestCount(cursor.requestsToday)))
-            cursorStack.addFullWidth(Self.statRow("7 DAYS", value: Self.requestCount(cursor.requestsLast7Days)))
+            cursorStack.addFullWidth(NSTextField.label(sectionTitleText("CURSOR")))
+            cursorStack.addFullWidth(Self.statRow("TODAY", value: requestCount(cursor.requestsToday)))
+            cursorStack.addFullWidth(Self.statRow("7 DAYS", value: requestCount(cursor.requestsLast7Days)))
             if let model = cursor.topModel {
                 cursorStack.addFullWidth(Self.statRow("TOP MODEL", value: Self.statValue(model.uppercased())))
             }
@@ -155,12 +158,8 @@ final class CockpitView: NSView {
         return content
     }
 
-    private static func sectionTitle(_ name: String) -> NSTextField {
-        .label(sectionTitleText(name))
-    }
-
-    private static func sectionTitleText(_ name: String) -> NSAttributedString {
-        Theme.text(name, font: Theme.displayFont(size: 11, weight: .bold), color: Theme.cyan, kern: 3)
+    private func sectionTitleText(_ name: String) -> NSAttributedString {
+        Theme.text(name, font: Theme.displayFont(size: 11, weight: .bold), color: accent, kern: 3)
     }
 
     private static func statRow(_ name: String, value: NSAttributedString) -> NSView {
@@ -175,17 +174,17 @@ final class CockpitView: NSView {
     }
 
     /// `30 REQUESTS`, with the number emphasized.
-    private static func requestCount(_ count: Int) -> NSAttributedString {
+    private func requestCount(_ count: Int) -> NSAttributedString {
         emphasized("\(count)", unit: count == 1 ? "REQUEST" : "REQUESTS")
     }
 
     /// `~$140 API EQ`: what the usage would cost at API prices, which a subscription does not charge.
-    private static func apiEquivalent(_ dollars: Double, isPartial: Bool) -> NSAttributedString {
+    private func apiEquivalent(_ dollars: Double, isPartial: Bool) -> NSAttributedString {
         emphasized(CostText.text(dollars, isPartial: isPartial), unit: "API EQ")
     }
 
-    private static func emphasized(_ figure: String, unit: String) -> NSAttributedString {
-        let value = NSMutableAttributedString(attributedString: statValue(figure, color: Theme.cyan))
+    private func emphasized(_ figure: String, unit: String) -> NSAttributedString {
+        let value = NSMutableAttributedString(attributedString: Self.statValue(figure, color: accent))
         value.append(Theme.text(
             " \(unit)",
             font: .monospacedSystemFont(ofSize: 9.5, weight: .regular), color: Theme.secondaryText, kern: 0.5

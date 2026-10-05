@@ -22,6 +22,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let appearanceStore = AppearanceStore()
     private lazy var customization = CustomizationWindowController(store: appearanceStore) { [weak self] in
         self?.panel.apply($0)
+        self?.render()
     }
     private lazy var panel = CockpitPanel(menu: makeMenu(), onClick: { [weak self] in self?.refresh() })
 

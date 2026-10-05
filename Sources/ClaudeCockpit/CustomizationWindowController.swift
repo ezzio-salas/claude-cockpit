@@ -1,7 +1,7 @@
 import AppKit
 import CockpitCore
 
-/// The Personalize window: a title and two colors. Every change is saved and shown on the card at once.
+/// The Personalize window: a title and three colors. Every change is saved and shown on the card at once.
 final class CustomizationWindowController: NSWindowController, NSTextFieldDelegate {
     private enum Metrics {
         static let padding: CGFloat = 20
@@ -13,6 +13,7 @@ final class CustomizationWindowController: NSWindowController, NSTextFieldDelega
     private let onChange: (CockpitAppearance) -> Void
 
     private let titleField = NSTextField()
+    private let accentWell = NSColorWell()
     private let borderWell = NSColorWell()
     private let glowWell = NSColorWell()
 
@@ -57,7 +58,7 @@ final class CustomizationWindowController: NSWindowController, NSTextFieldDelega
         titleField.delegate = self
         titleField.widthAnchor.constraint(equalToConstant: Metrics.fieldWidth).isActive = true
 
-        for well in [borderWell, glowWell] {
+        for well in [accentWell, borderWell, glowWell] {
             well.target = self
             well.action = #selector(colorChanged)
             well.widthAnchor.constraint(equalToConstant: Metrics.wellSize.width).isActive = true
@@ -66,15 +67,17 @@ final class CustomizationWindowController: NSWindowController, NSTextFieldDelega
 
         let grid = NSGridView(views: [
             [NSTextField(labelWithString: "Title"), titleField],
+            [NSTextField(labelWithString: "Text color"), accentWell],
             [NSTextField(labelWithString: "Border color"), borderWell],
             [NSTextField(labelWithString: "Glow color"), glowWell],
         ])
         grid.column(at: 0).xPlacement = .trailing
         grid.rowAlignment = .firstBaseline
-        grid.row(at: 1).rowAlignment = .none
-        grid.row(at: 1).yPlacement = .center
-        grid.row(at: 2).rowAlignment = .none
-        grid.row(at: 2).yPlacement = .center
+        // Color wells have no text baseline to line up with their labels.
+        for colorRow in 1..<grid.numberOfRows {
+            grid.row(at: colorRow).rowAlignment = .none
+            grid.row(at: colorRow).yPlacement = .center
+        }
         grid.rowSpacing = 12
         grid.columnSpacing = 10
 
@@ -101,6 +104,7 @@ final class CustomizationWindowController: NSWindowController, NSTextFieldDelega
 
     private func show(_ appearance: CockpitAppearance) {
         titleField.stringValue = appearance.title
+        accentWell.color = NSColor(appearance.accent)
         borderWell.color = NSColor(appearance.border)
         glowWell.color = NSColor(appearance.glow)
     }
@@ -116,6 +120,7 @@ final class CustomizationWindowController: NSWindowController, NSTextFieldDelega
     private func saveAndApply() {
         let appearance = CockpitAppearance(
             title: titleField.stringValue,
+            accent: accentWell.color.hexColor ?? .cockpitCyan,
             border: borderWell.color.hexColor ?? .cockpitCyan,
             glow: glowWell.color.hexColor ?? .cockpitCyan
         )

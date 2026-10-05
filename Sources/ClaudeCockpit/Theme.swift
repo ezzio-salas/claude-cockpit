@@ -19,15 +19,15 @@ enum Theme {
         case bold = "Orbitron-Bold"
     }
 
-    static let cyan = NSColor(srgbRed: 0.31, green: 0.91, blue: 1.0, alpha: 1)
     static let amber = NSColor(srgbRed: 1.0, green: 0.72, blue: 0.24, alpha: 1)
     static let red = NSColor(srgbRed: 1.0, green: 0.33, blue: 0.38, alpha: 1)
     static let primaryText = NSColor(white: 1, alpha: 0.78)
     static let secondaryText = NSColor(white: 1, alpha: 0.42)
 
-    static func color(for severity: UsageMeter.Severity) -> NSColor {
+    /// Warning levels keep their own colors whatever accent is chosen, because the color is the warning.
+    static func color(for severity: UsageMeter.Severity, accent: NSColor) -> NSColor {
         switch severity {
-        case .normal: return cyan
+        case .normal: return accent
         case .elevated: return amber
         case .critical: return red
         }

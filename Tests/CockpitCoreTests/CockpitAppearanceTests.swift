@@ -47,7 +47,9 @@ final class CockpitAppearanceTests: XCTestCase {
     }
 
     func testAppearanceNormalizesItsTitle() {
-        let appearance = CockpitAppearance(title: " side project ", border: .cockpitCyan, glow: .cockpitCyan)
+        let appearance = CockpitAppearance(
+            title: " side project ", accent: .cockpitCyan, border: .cockpitCyan, glow: .cockpitCyan
+        )
 
         XCTAssertEqual(appearance.title, "SIDE PROJECT")
     }
@@ -75,7 +77,10 @@ final class AppearanceStoreTests: XCTestCase {
 
     func testSavedAppearanceIsReadBack() {
         let custom = CockpitAppearance(
-            title: "work", border: HexColor(red: 1, green: 0.2, blue: 0), glow: HexColor(red: 0, green: 1, blue: 0)
+            title: "work",
+            accent: HexColor(red: 1, green: 1, blue: 0),
+            border: HexColor(red: 1, green: 0.2, blue: 0),
+            glow: HexColor(red: 0, green: 1, blue: 0)
         )
 
         store.appearance = custom
@@ -85,11 +90,16 @@ final class AppearanceStoreTests: XCTestCase {
 
     func testColorsAreStoredAsHexSoTheyCanBeSetByHand() {
         store.appearance = CockpitAppearance(
-            title: "work", border: HexColor(red: 1, green: 0.2, blue: 0), glow: .cockpitCyan
+            title: "work",
+            accent: HexColor(red: 1, green: 1, blue: 0),
+            border: HexColor(red: 1, green: 0.2, blue: 0),
+            glow: HexColor(red: 0, green: 1, blue: 0)
         )
 
         XCTAssertEqual(defaults.string(forKey: "title"), "WORK")
+        XCTAssertEqual(defaults.string(forKey: "accentColor"), "#FFFF00")
         XCTAssertEqual(defaults.string(forKey: "borderColor"), "#FF3300")
+        XCTAssertEqual(defaults.string(forKey: "glowColor"), "#00FF00")
     }
 
     func testUnreadableStoredColorFallsBackToTheDefaultColor() {
@@ -97,12 +107,27 @@ final class AppearanceStoreTests: XCTestCase {
         defaults.set("not a color", forKey: "glowColor")
 
         XCTAssertEqual(
-            store.appearance, CockpitAppearance(title: "WORK", border: .cockpitCyan, glow: .cockpitCyan)
+            store.appearance,
+            CockpitAppearance(title: "WORK", accent: .cockpitCyan, border: .cockpitCyan, glow: .cockpitCyan)
         )
     }
 
+    func testAppearanceSavedBeforeTheAccentExistedKeepsItsColorsAndGetsTheDefaultAccent() {
+        defaults.set("WORK", forKey: "title")
+        defaults.set("#FF3300", forKey: "borderColor")
+        defaults.set("#00FF00", forKey: "glowColor")
+
+        XCTAssertEqual(store.appearance, CockpitAppearance(
+            title: "WORK",
+            accent: .cockpitCyan,
+            border: HexColor(red: 1, green: 0.2, blue: 0),
+            glow: HexColor(red: 0, green: 1, blue: 0)
+        ))
+    }
+
     func testResetReturnsToTheDefaultAppearance() {
-        store.appearance = CockpitAppearance(title: "work", border: HexColor(red: 1, green: 0, blue: 0), glow: .cockpitCyan)
+        let red = HexColor(red: 1, green: 0, blue: 0)
+        store.appearance = CockpitAppearance(title: "work", accent: red, border: red, glow: red)
 
         store.reset()
 

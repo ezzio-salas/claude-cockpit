@@ -58,7 +58,7 @@ Usage is re-read every 60 seconds. Bar colors follow the percentage used:
 
 | Used | Color |
 | --- | --- |
-| below 70% | cyan |
+| below 70% | cyan, or your [text color](#personalizing) |
 | 70% to 89% | amber |
 | 90% and above | red |
 
@@ -80,22 +80,25 @@ The widget only ever shows numbers it actually read from Claude.
 
 ## Personalizing
 
-The first time the app opens, a **Personalize Claude Cockpit** window offers three settings.
+The first time the app opens, a **Personalize Claude Cockpit** window offers four settings.
 Close it to keep the defaults; open it again any time with right-click → **Customize…**.
 
 | Setting | Default | Notes |
 | --- | --- | --- |
 | Title | `CLAUDE` | Shown in capitals, up to 14 characters. Leave it blank for the default. |
+| Text color | cyan (`#4FE8FF`) | The titles, the cost and request figures, and meters below 70%. |
 | Border color | cyan (`#4FE8FF`) | The thin outline of the card. |
 | Glow color | cyan (`#4FE8FF`) | The soft halo around the card. |
 
 Changes show on the card as you make them and are saved immediately. **Reset to Defaults**
-restores all three.
+restores all four. Meters at 70% and above stay amber and red whatever text color you pick,
+because there the color is the warning.
 
 The same settings can be written from the command line; relaunch the app afterwards:
 
 ```sh
 defaults write local.claude-cockpit title "WORK"
+defaults write local.claude-cockpit accentColor "#B6FF5C"
 defaults write local.claude-cockpit borderColor "#FF4FD8"
 defaults write local.claude-cockpit glowColor "#FF9A3D"
 ```

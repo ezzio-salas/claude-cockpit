@@ -44,14 +44,19 @@ public struct CockpitAppearance: Equatable, Sendable {
     public static let defaultTitle = "CLAUDE"
     /// The longest title that leaves room for the status note beside it.
     public static let maximumTitleLength = 14
-    public static let standard = CockpitAppearance(title: defaultTitle, border: .cockpitCyan, glow: .cockpitCyan)
+    public static let standard = CockpitAppearance(
+        title: defaultTitle, accent: .cockpitCyan, border: .cockpitCyan, glow: .cockpitCyan
+    )
 
     public let title: String
+    /// Colors the section titles, the figures, and meters that are below the warning levels.
+    public let accent: HexColor
     public let border: HexColor
     public let glow: HexColor
 
-    public init(title: String, border: HexColor, glow: HexColor) {
+    public init(title: String, accent: HexColor, border: HexColor, glow: HexColor) {
         self.title = Self.normalizedTitle(title)
+        self.accent = accent
         self.border = border
         self.glow = glow
     }
@@ -69,6 +74,7 @@ public struct CockpitAppearance: Equatable, Sendable {
 public struct AppearanceStore {
     private enum Key {
         static let title = "title"
+        static let accent = "accentColor"
         static let border = "borderColor"
         static let glow = "glowColor"
         static let offered = "hasOfferedCustomization"
@@ -84,12 +90,14 @@ public struct AppearanceStore {
         get {
             CockpitAppearance(
                 title: defaults.string(forKey: Key.title) ?? CockpitAppearance.defaultTitle,
+                accent: color(forKey: Key.accent),
                 border: color(forKey: Key.border),
                 glow: color(forKey: Key.glow)
             )
         }
         nonmutating set {
             defaults.set(newValue.title, forKey: Key.title)
+            defaults.set(newValue.accent.hex, forKey: Key.accent)
             defaults.set(newValue.border.hex, forKey: Key.border)
             defaults.set(newValue.glow.hex, forKey: Key.glow)
         }
@@ -102,7 +110,7 @@ public struct AppearanceStore {
     }
 
     public func reset() {
-        [Key.title, Key.border, Key.glow].forEach(defaults.removeObject(forKey:))
+        [Key.title, Key.accent, Key.border, Key.glow].forEach(defaults.removeObject(forKey:))
     }
 
     private func color(forKey key: String) -> HexColor {

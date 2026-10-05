@@ -3,9 +3,9 @@ import CockpitCore
 
 /// One usage limit: its name, percentage, a bar, and when it resets.
 final class MeterRowView: NSView {
-    init(meter: UsageMeter, now: Date) {
+    init(meter: UsageMeter, now: Date, accent: NSColor) {
         super.init(frame: .zero)
-        let color = Theme.color(for: meter.severity)
+        let color = Theme.color(for: meter.severity, accent: accent)
 
         let name = NSTextField.label(Theme.text(
             meter.label, font: Theme.displayFont(size: 10), color: Theme.primaryText, kern: 1.5
