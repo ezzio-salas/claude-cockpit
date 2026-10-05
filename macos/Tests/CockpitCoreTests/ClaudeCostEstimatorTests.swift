@@ -196,7 +196,8 @@ final class ClaudeCostEstimatorTests: XCTestCase {
             try reply("days-ago", model: "claude-future-9", hoursAgo: 4 * 24, output: 1_000_000),
         ], to: "project/session.jsonl")
 
-        let cost = try XCTUnwrap(await estimate())
+        let estimated = await estimate()
+        let cost = try XCTUnwrap(estimated)
 
         XCTAssertEqual(cost.last7Days.unpricedModels, ["claude-future-9"])
         XCTAssertTrue(cost.last7Days.isPartial)
