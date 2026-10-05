@@ -11,7 +11,7 @@ rm -rf "$app"
 mkdir -p "$app/Contents/MacOS" "$app/Contents/Resources"
 cp .build/release/ClaudeCockpit "$app/Contents/MacOS/"
 cp Info.plist "$app/Contents/"
-cp Resources/Orbitron.ttf Resources/Orbitron-OFL.txt "$app/Contents/Resources/"
+cp ../assets/Orbitron.ttf ../assets/Orbitron-OFL.txt "$app/Contents/Resources/"
 codesign --force --sign - "$app"
 
 echo "Built $(pwd)/$app"
