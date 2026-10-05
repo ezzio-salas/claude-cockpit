@@ -19,6 +19,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             ?? ClaudeCostEstimator.defaultTranscripts
     )
     private let cursorReader = CursorActivityReader()
+    private let appearanceStore = AppearanceStore()
+    private lazy var customization = CustomizationWindowController(store: appearanceStore) { [weak self] in
+        self?.panel.apply($0)
+    }
     private lazy var panel = CockpitPanel(menu: makeMenu(), onClick: { [weak self] in self?.refresh() })
 
     private var lastReading: (meters: [UsageMeter], takenAt: Date)?
@@ -31,6 +35,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var isFetching = false
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        NSApp.mainMenu = Self.makeMainMenu()
+        panel.apply(appearanceStore.appearance)
         refresh()
         Timer.scheduledTimer(
             timeInterval: Self.refreshInterval, target: self, selector: #selector(refresh), userInfo: nil, repeats: true
@@ -38,6 +44,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         Timer.scheduledTimer(
             timeInterval: Self.redrawInterval, target: self, selector: #selector(render), userInfo: nil, repeats: true
         )
+        offerCustomizationOnFirstLaunch()
+    }
+
+    /// The first launch offers personalization once; afterwards it is reached from the card's menu.
+    private func offerCustomizationOnFirstLaunch() {
+        guard !appearanceStore.hasOfferedCustomization else { return }
+        appearanceStore.hasOfferedCustomization = true
+        customization.present()
+    }
+
+    @objc private func showCustomization() {
+        customization.present()
     }
 
     @objc private func refresh() {
@@ -118,9 +136,25 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func makeMenu() -> NSMenu {
         let menu = NSMenu()
         menu.addItem(withTitle: "Refresh", action: #selector(refresh), keyEquivalent: "").target = self
+        menu.addItem(withTitle: "Customize…", action: #selector(showCustomization), keyEquivalent: "").target = self
         menu.addItem(.separator())
         menu.addItem(withTitle: "Quit Claude Cockpit", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "")
         return menu
+    }
+
+    /// The app shows no menu bar, but text fields rely on these items for their keyboard shortcuts.
+    private static func makeMainMenu() -> NSMenu {
+        let edit = NSMenu(title: "Edit")
+        edit.addItem(withTitle: "Cut", action: #selector(NSText.cut(_:)), keyEquivalent: "x")
+        edit.addItem(withTitle: "Copy", action: #selector(NSText.copy(_:)), keyEquivalent: "c")
+        edit.addItem(withTitle: "Paste", action: #selector(NSText.paste(_:)), keyEquivalent: "v")
+        edit.addItem(withTitle: "Select All", action: #selector(NSText.selectAll(_:)), keyEquivalent: "a")
+
+        let editItem = NSMenuItem()
+        editItem.submenu = edit
+        let mainMenu = NSMenu()
+        mainMenu.addItem(editItem)
+        return mainMenu
     }
 
     private static func message(for error: UsageFetcher.FetchError) -> String {

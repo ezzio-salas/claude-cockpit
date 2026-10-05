@@ -1,4 +1,5 @@
 import AppKit
+import CockpitCore
 
 /// A frameless panel that floats above every window on every Space and never takes focus.
 final class CockpitPanel: NSPanel {
@@ -21,6 +22,10 @@ final class CockpitPanel: NSPanel {
         cockpitView.onClick = onClick
         cockpitView.onMoved = { [weak self] in self?.saveTopLeft() }
         contentView = cockpitView
+    }
+
+    func apply(_ appearance: CockpitAppearance) {
+        cockpitView.apply(appearance)
     }
 
     /// Shows the snapshot and resizes to fit it, keeping the top-left corner where it is.

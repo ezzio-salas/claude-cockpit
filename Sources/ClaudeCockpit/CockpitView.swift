@@ -33,6 +33,8 @@ final class CockpitView: NSView {
     var onMoved: (() -> Void)?
 
     private let glow = CALayer()
+    private let surface = NSView()
+    private let titleLabel = NSTextField.label(NSAttributedString())
     private let statusLabel = NSTextField.label(NSAttributedString())
     private let bodyStack = NSStackView.column(spacing: 14)
     private let costStack = NSStackView.column(spacing: 9)
@@ -44,7 +46,6 @@ final class CockpitView: NSView {
         wantsLayer = true
         appearance = NSAppearance(named: .darkAqua)
 
-        glow.shadowColor = Theme.cyan.cgColor
         glow.shadowOpacity = 0.55
         glow.shadowRadius = 9
         glow.shadowOffset = .zero
@@ -59,10 +60,17 @@ final class CockpitView: NSView {
             content.leadingAnchor.constraint(equalTo: card.leadingAnchor, constant: Metrics.padding),
             content.trailingAnchor.constraint(equalTo: card.trailingAnchor, constant: -Metrics.padding),
         ])
+        apply(.standard)
     }
 
     required init?(coder: NSCoder) {
         fatalError("init(coder:) is not supported")
+    }
+
+    func apply(_ appearance: CockpitAppearance) {
+        titleLabel.attributedStringValue = Self.sectionTitleText(appearance.title)
+        surface.layer?.borderColor = NSColor(appearance.border).withAlphaComponent(0.45).cgColor
+        glow.shadowColor = NSColor(appearance.glow).cgColor
     }
 
     func render(_ snapshot: CockpitSnapshot, now: Date) {
@@ -118,12 +126,10 @@ final class CockpitView: NSView {
         glass.state = .active
         glass.maskImage = Self.roundedMask(radius: Metrics.cornerRadius)
 
-        let surface = NSView()
         surface.wantsLayer = true
         surface.layer?.backgroundColor = NSColor(srgbRed: 0.02, green: 0.04, blue: 0.07, alpha: 0.55).cgColor
         surface.layer?.cornerRadius = Metrics.cornerRadius
         surface.layer?.borderWidth = 1
-        surface.layer?.borderColor = Theme.cyan.withAlphaComponent(0.45).cgColor
 
         for view in [glass, surface] {
             view.translatesAutoresizingMaskIntoConstraints = false
@@ -141,7 +147,7 @@ final class CockpitView: NSView {
 
     private func makeContent() -> NSView {
         let content = NSStackView.column(spacing: 14)
-        content.addFullWidth(NSStackView.splitRow(leading: Self.sectionTitle("CLAUDE"), trailing: statusLabel))
+        content.addFullWidth(NSStackView.splitRow(leading: titleLabel, trailing: statusLabel))
         content.addFullWidth(bodyStack)
         content.addFullWidth(costStack)
         content.addFullWidth(cursorStack)
@@ -150,7 +156,11 @@ final class CockpitView: NSView {
     }
 
     private static func sectionTitle(_ name: String) -> NSTextField {
-        .label(Theme.text(name, font: Theme.displayFont(size: 11, weight: .bold), color: Theme.cyan, kern: 3))
+        .label(sectionTitleText(name))
+    }
+
+    private static func sectionTitleText(_ name: String) -> NSAttributedString {
+        Theme.text(name, font: Theme.displayFont(size: 11, weight: .bold), color: Theme.cyan, kern: 3)
     }
 
     private static func statRow(_ name: String, value: NSAttributedString) -> NSView {

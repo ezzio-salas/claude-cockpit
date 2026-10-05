@@ -72,11 +72,13 @@ claude_cockpit/
       ModelPricing.swift
       TranscriptParser.swift
       ClaudeCostEstimator.swift
+      CockpitAppearance.swift
     ClaudeCockpit/              # executable: window and drawing
       main.swift
       AppDelegate.swift
       CockpitPanel.swift
       CockpitView.swift
+      CustomizationWindowController.swift
       MeterRowView.swift
       Theme.swift
       Layout.swift
@@ -184,11 +186,24 @@ first launch places it near the top-right of the main screen.
   label/value rows (`TODAY`, `7 DAYS`, `TOP MODEL`). This section is not dimmed when the
   Claude reading is stale.
 
+**Personalization** (added after the first version)
+
+- `CockpitAppearance` holds the title, the border color and the glow color. The title is
+  trimmed, shown in capitals and cut to 14 characters so the status note still fits beside
+  it; a blank title means the default `CLAUDE`. Both colors default to the cyan accent.
+- `AppearanceStore` keeps the three values in user defaults as plain strings (`title`,
+  `borderColor` and `glowColor` as `#RRGGBB`), so they can also be set with `defaults
+  write`. An unreadable color falls back to the default.
+- The first launch shows the Personalize window once (`hasOfferedCustomization`); later
+  it is opened from the card's right-click menu. The window is not modal, so the card
+  keeps refreshing behind it, and every change is saved and applied immediately.
+- Meter, cost and section-title colors are not configurable; bar colors carry meaning.
+
 **Interaction**
 
 - Drag anywhere to move.
 - Click (without dragging) refreshes immediately.
-- Right-click menu: Refresh, Quit.
+- Right-click menu: Refresh, Customize…, Quit.
 
 ## Refresh and state
 

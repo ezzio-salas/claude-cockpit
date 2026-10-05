@@ -49,7 +49,7 @@ The app has no Dock icon and no menu bar item; the floating card is the whole in
 | --- | --- |
 | Drag the card | Moves it. The position is remembered between launches. |
 | Click the card | Refreshes now. `SYNC` shows in the header while it reads. |
-| Right-click the card | Menu with **Refresh** and **Quit Claude Cockpit**. |
+| Right-click the card | Menu with **Refresh**, **Customize…** and **Quit Claude Cockpit**. |
 
 The card stays above other windows on every Space, including full-screen apps, and never
 takes keyboard focus.
@@ -77,6 +77,28 @@ The widget only ever shows numbers it actually read from Claude.
 | `TIMED OUT` | The CLI did not answer within 20 seconds. |
 | `COULD NOT READ USAGE` | The CLI exited with an error, for example when signed out. |
 | `UNRECOGNIZED OUTPUT` | The CLI answered, but without any usage lines. |
+
+## Personalizing
+
+The first time the app opens, a **Personalize Claude Cockpit** window offers three settings.
+Close it to keep the defaults; open it again any time with right-click → **Customize…**.
+
+| Setting | Default | Notes |
+| --- | --- | --- |
+| Title | `CLAUDE` | Shown in capitals, up to 14 characters. Leave it blank for the default. |
+| Border color | cyan (`#4FE8FF`) | The thin outline of the card. |
+| Glow color | cyan (`#4FE8FF`) | The soft halo around the card. |
+
+Changes show on the card as you make them and are saved immediately. **Reset to Defaults**
+restores all three.
+
+The same settings can be written from the command line; relaunch the app afterwards:
+
+```sh
+defaults write local.claude-cockpit title "WORK"
+defaults write local.claude-cockpit borderColor "#FF4FD8"
+defaults write local.claude-cockpit glowColor "#FF9A3D"
+```
 
 ## Estimated cost
 
@@ -223,7 +245,7 @@ bundled into the `.app`.
 | Path | Contents |
 | --- | --- |
 | `Sources/CockpitCore` | Usage parsing, the CLI runner, the cost estimator and the Cursor reader. No UI, fully unit-tested. |
-| `Sources/ClaudeCockpit` | The AppKit panel and views. |
+| `Sources/ClaudeCockpit` | The AppKit panel, views and the Personalize window. |
 | `Tests/CockpitCoreTests` | Unit tests. |
 | `Resources` | The Orbitron font and its license. |
 | `docs/design.md` | The design notes the app was built from. |

@@ -1,6 +1,18 @@
 import AppKit
 import CockpitCore
 
+extension NSColor {
+    convenience init(_ color: HexColor) {
+        self.init(srgbRed: color.red, green: color.green, blue: color.blue, alpha: 1)
+    }
+
+    /// The nearest opaque sRGB color, or nil for a color that has no RGB form, such as a pattern.
+    var hexColor: HexColor? {
+        guard let rgb = usingColorSpace(.sRGB) else { return nil }
+        return HexColor(red: rgb.redComponent, green: rgb.greenComponent, blue: rgb.blueComponent)
+    }
+}
+
 enum Theme {
     enum DisplayWeight: String {
         case medium = "Orbitron-Medium"
